@@ -1,0 +1,3 @@
+# Compilación de Rust y Tauri
+target/
+Cargo.lock

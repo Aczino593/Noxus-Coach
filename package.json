@@ -1,0 +1,29 @@
+{
+  "name": "noxus-coach",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Coaching y analítica de League of Legends — Crimson / Noxus (Tauri)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "sync:data": "node scripts/sync-matchups.mjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.2.5",
+    "@fontsource-variable/jetbrains-mono": "^5.2.5",
+    "@tauri-apps/api": "^2.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@tauri-apps/cli": "^2.5.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.3.0"
+  }
+}

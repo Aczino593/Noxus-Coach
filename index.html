@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Noxus Coach — coaching y analítica de League of Legends: historial, estadísticas, builds, draft y modo Clash 5v5."
+    />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <title>Noxus Coach · Analítica y Coaching de League of Legends</title>
+  </head>
+  <body class="bg-canvas text-ink">
+    <div id="app" class="flex h-screen w-screen flex-col overflow-hidden">
+      <header id="titlebar" class="titlebar" data-tauri-drag-region role="banner"></header>
+      <main id="main" class="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <section id="page-profile" class="page" hidden aria-label="Perfil"></section>
+        <section id="page-tools" class="page" hidden aria-label="Herramientas"></section>
+        <section id="page-clash" class="page" hidden aria-label="Modo Clash"></section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

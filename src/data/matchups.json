@@ -1,0 +1,1923 @@
+{
+  "metadata": {
+    "generatedAt": "2026-10-16T18:24:44.423Z",
+    "patch": "16.20.1",
+    "source": "Data Dragon + CommunityDragon + U.GG / Meta Fallback",
+    "rolesSupported": [
+      "TOP",
+      "JUNGLE",
+      "MIDDLE",
+      "BOTTOM",
+      "UTILITY"
+    ]
+  },
+  "champions": {
+    "Aatrox": {
+      "championId": 266,
+      "key": "Aatrox",
+      "name": "Aatrox",
+      "damageType": "AD",
+      "primaryRole": "TOP",
+      "archetype": "bruiser",
+      "roles": {
+        "TOP": {
+          "role": "TOP",
+          "winRate": 51.4,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "priority": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "orderString": "Q > E > W"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8010,
+                "name": "Conquistador",
+                "path": "Styles/Precision/Conqueror/Conqueror.png"
+              },
+              "slots": [
+                "Triunfo",
+                "Leyenda: Velocidad",
+                "Último esfuerzo"
+              ]
+            },
+            "secondary": {
+              "treeId": "resolve",
+              "treeName": "Valor",
+              "slots": [
+                "Revestimiento de huesos",
+                "Revitalizar"
+              ]
+            },
+            "shards": [
+              "Fuerza Adaptable",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1055,
+              2003
+            ],
+            "boots": 3047,
+            "core": [
+              6609,
+              3047,
+              3071,
+              3053,
+              6333,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Darius": {
+      "championId": 122,
+      "key": "Darius",
+      "name": "Darius",
+      "damageType": "AD",
+      "primaryRole": "TOP",
+      "archetype": "bruiser",
+      "roles": {
+        "TOP": {
+          "role": "TOP",
+          "winRate": 52.1,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "orderString": "Q > E > W"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8010,
+                "name": "Conquistador",
+                "path": "Styles/Precision/Conqueror/Conqueror.png"
+              },
+              "slots": [
+                "Triunfo",
+                "Leyenda: Presteza",
+                "Último esfuerzo"
+              ]
+            },
+            "secondary": {
+              "treeId": "sorcery",
+              "treeName": "Brujería",
+              "slots": [
+                "Arcanólogo axiomático",
+                "Celeridad"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1055,
+              2003
+            ],
+            "boots": 3047,
+            "core": [
+              3078,
+              3047,
+              3053,
+              3742,
+              4401,
+              3075
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Garen": {
+      "championId": 86,
+      "key": "Garen",
+      "name": "Garen",
+      "damageType": "AD",
+      "primaryRole": "TOP",
+      "archetype": "bruiser",
+      "roles": {
+        "TOP": {
+          "role": "TOP",
+          "winRate": 51.8,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "priority": [
+              "E",
+              "Q",
+              "W"
+            ],
+            "orderString": "E > Q > W"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8010,
+                "name": "Conquistador",
+                "path": "Styles/Precision/Conqueror/Conqueror.png"
+              },
+              "slots": [
+                "Triunfo",
+                "Leyenda: Velocidad",
+                "Último esfuerzo"
+              ]
+            },
+            "secondary": {
+              "treeId": "sorcery",
+              "treeName": "Brujería",
+              "slots": [
+                "Arcanólogo axiomático",
+                "Celeridad"
+              ]
+            },
+            "shards": [
+              "Fuerza Adaptable",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1055,
+              2003
+            ],
+            "boots": 3006,
+            "core": [
+              3078,
+              3006,
+              3033,
+              3742,
+              3053,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "LeeSin": {
+      "championId": 64,
+      "key": "LeeSin",
+      "name": "Lee Sin",
+      "damageType": "AD",
+      "primaryRole": "JUNGLE",
+      "archetype": "bruiser",
+      "roles": {
+        "JUNGLE": {
+          "role": "JUNGLE",
+          "winRate": 50.9,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "orderString": "Q > W > E"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8010,
+                "name": "Conquistador",
+                "path": "Styles/Precision/Conqueror/Conqueror.png"
+              },
+              "slots": [
+                "Triunfo",
+                "Leyenda: Presteza",
+                "Golpe de gracia"
+              ]
+            },
+            "secondary": {
+              "treeId": "inspiration",
+              "treeName": "Inspiración",
+              "slots": [
+                "Perspicacia cósmica",
+                "Calzado mágico"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1103,
+              2003
+            ],
+            "boots": 3111,
+            "core": [
+              6609,
+              3111,
+              3071,
+              6333,
+              3053,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Viego": {
+      "championId": 234,
+      "key": "Viego",
+      "name": "Viego",
+      "damageType": "AD",
+      "primaryRole": "JUNGLE",
+      "archetype": "bruiser",
+      "roles": {
+        "JUNGLE": {
+          "role": "JUNGLE",
+          "winRate": 51.2,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "orderString": "Q > E > W"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "domination",
+              "treeName": "Dominación",
+              "keystone": {
+                "id": 9923,
+                "name": "Lluvia de cuchillas",
+                "path": "Styles/Domination/HailOfBlades/HailOfBlades.png"
+              },
+              "slots": [
+                "Impacto repentino",
+                "Sexto sentido",
+                "Cazador de tesoros"
+              ]
+            },
+            "secondary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "slots": [
+                "Leyenda: Presteza",
+                "Triunfo"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1102,
+              2003
+            ],
+            "boots": 3047,
+            "core": [
+              3078,
+              3047,
+              3153,
+              6333,
+              3053,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Ahri": {
+      "championId": 103,
+      "key": "Ahri",
+      "name": "Ahri",
+      "damageType": "AP",
+      "primaryRole": "MIDDLE",
+      "archetype": "mage",
+      "roles": {
+        "MIDDLE": {
+          "role": "MIDDLE",
+          "winRate": 52.4,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "orderString": "Q > W > E"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "domination",
+              "treeName": "Dominación",
+              "keystone": {
+                "id": 8112,
+                "name": "Electrocutar",
+                "path": "Styles/Domination/Electrocute/Electrocute.png"
+              },
+              "slots": [
+                "Sabor a sangre",
+                "Recuerdo macabro",
+                "Cazador definitivo"
+              ]
+            },
+            "secondary": {
+              "treeId": "sorcery",
+              "treeName": "Brujería",
+              "slots": [
+                "Banda de maná",
+                "Trascendencia"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1056,
+              2003
+            ],
+            "boots": 3020,
+            "core": [
+              6655,
+              3020,
+              4645,
+              3089,
+              3157,
+              3135
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3916,
+              "componentName": "Orbe del Olvido",
+              "fullItemId": 3165,
+              "fullItemName": "Morellonomicón",
+              "trigger": "Rivales con vampirismo o curaciones masivas (Aatrox, Warwick, Soraka, Vlad)",
+              "tip": "Compra Orbe del Olvido (800g) en tu 2da vuelta a base; aplica Heridas Graves sin retrasar tu pico mítico."
+            },
+            "antiTank": {
+              "componentId": 3136,
+              "componentName": "Disfraz Encantado",
+              "fullItemId": 6653,
+              "fullItemName": "Tormento de Liandry",
+              "alternativeId": 3135,
+              "alternativeName": "Báculo del Vacío",
+              "trigger": "Rivales apilando vida y resistencia mágica (Ornn, Sion, ChoGath, Galio)",
+              "tip": "Liandry quema un % de la vida máxima cada segundo; añade Báculo del Vacío si superan 100 de RM."
+            },
+            "antiAssassin": {
+              "componentId": 2420,
+              "componentName": "Guardabrazo del Buscador",
+              "fullItemId": 3157,
+              "fullItemName": "Reloj de Arena de Zhonya",
+              "trigger": "Asesinos de burst físico o definitivo letal (Zed, Talon, Rengar, Blue Kayn)",
+              "tip": "La activa de Éxtasis (2.5s) anula completamente las definitivas de daño retardado."
+            }
+          }
+        }
+      }
+    },
+    "Akali": {
+      "championId": 84,
+      "key": "Akali",
+      "name": "Akali",
+      "damageType": "AP",
+      "primaryRole": "MIDDLE",
+      "archetype": "assassin",
+      "roles": {
+        "MIDDLE": {
+          "role": "MIDDLE",
+          "winRate": 50.8,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "priority": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "orderString": "Q > E > W"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "domination",
+              "treeName": "Dominación",
+              "keystone": {
+                "id": 8112,
+                "name": "Electrocutar",
+                "path": "Styles/Domination/Electrocute/Electrocute.png"
+              },
+              "slots": [
+                "Impacto repentino",
+                "Recuerdo macabro",
+                "Cazador definitivo"
+              ]
+            },
+            "secondary": {
+              "treeId": "resolve",
+              "treeName": "Valor",
+              "slots": [
+                "Sobrecrecimiento",
+                "Fuerzas renovadas"
+              ]
+            },
+            "shards": [
+              "Fuerza Adaptable",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1054,
+              2003
+            ],
+            "boots": 3020,
+            "core": [
+              3152,
+              3020,
+              4645,
+              3157,
+              3089,
+              3135
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3916,
+              "componentName": "Orbe del Olvido",
+              "fullItemId": 3165,
+              "fullItemName": "Morellonomicón",
+              "trigger": "Rivales con vampirismo o curaciones masivas (Aatrox, Warwick, Soraka, Vlad)",
+              "tip": "Compra Orbe del Olvido (800g) en tu 2da vuelta a base; aplica Heridas Graves sin retrasar tu pico mítico."
+            },
+            "antiTank": {
+              "componentId": 3136,
+              "componentName": "Disfraz Encantado",
+              "fullItemId": 6653,
+              "fullItemName": "Tormento de Liandry",
+              "alternativeId": 3135,
+              "alternativeName": "Báculo del Vacío",
+              "trigger": "Rivales apilando vida y resistencia mágica (Ornn, Sion, ChoGath, Galio)",
+              "tip": "Liandry quema un % de la vida máxima cada segundo; añade Báculo del Vacío si superan 100 de RM."
+            },
+            "antiAssassin": {
+              "componentId": 2420,
+              "componentName": "Guardabrazo del Buscador",
+              "fullItemId": 3157,
+              "fullItemName": "Reloj de Arena de Zhonya",
+              "trigger": "Asesinos de burst físico o definitivo letal (Zed, Talon, Rengar, Blue Kayn)",
+              "tip": "La activa de Éxtasis (2.5s) anula completamente las definitivas de daño retardado."
+            }
+          }
+        }
+      }
+    },
+    "Yasuo": {
+      "championId": 157,
+      "key": "Yasuo",
+      "name": "Yasuo",
+      "damageType": "AD",
+      "primaryRole": "MIDDLE",
+      "archetype": "marksman",
+      "roles": {
+        "MIDDLE": {
+          "role": "MIDDLE",
+          "winRate": 51.3,
+          "skillOrder": {
+            "first3": [
+              "E",
+              "Q",
+              "W"
+            ],
+            "priority": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "orderString": "Q > E > W"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8008,
+                "name": "Compás letal",
+                "path": "Styles/Precision/LethalTempo/LethalTempoTemp.png"
+              },
+              "slots": [
+                "Absorber vida",
+                "Leyenda: Presteza",
+                "Último esfuerzo"
+              ]
+            },
+            "secondary": {
+              "treeId": "resolve",
+              "treeName": "Valor",
+              "slots": [
+                "Sobrecrecimiento",
+                "Fuerzas renovadas"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1054,
+              2003
+            ],
+            "boots": 3006,
+            "core": [
+              3006,
+              3046,
+              3031,
+              3153,
+              3053,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Yone": {
+      "championId": 777,
+      "key": "Yone",
+      "name": "Yone",
+      "damageType": "AD",
+      "primaryRole": "MIDDLE",
+      "archetype": "bruiser",
+      "roles": {
+        "MIDDLE": {
+          "role": "MIDDLE",
+          "winRate": 50.7,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "orderString": "Q > E > W"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8008,
+                "name": "Compás letal",
+                "path": "Styles/Precision/LethalTempo/LethalTempoTemp.png"
+              },
+              "slots": [
+                "Absorber vida",
+                "Leyenda: Presteza",
+                "Último esfuerzo"
+              ]
+            },
+            "secondary": {
+              "treeId": "resolve",
+              "treeName": "Valor",
+              "slots": [
+                "Sobrecrecimiento",
+                "Fuerzas renovadas"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1054,
+              2003
+            ],
+            "boots": 3006,
+            "core": [
+              3006,
+              3153,
+              3031,
+              3046,
+              3053,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Sylas": {
+      "championId": 517,
+      "key": "Sylas",
+      "name": "Sylas",
+      "damageType": "AP",
+      "primaryRole": "MIDDLE",
+      "archetype": "mage",
+      "roles": {
+        "MIDDLE": {
+          "role": "MIDDLE",
+          "winRate": 51,
+          "skillOrder": {
+            "first3": [
+              "E",
+              "W",
+              "Q"
+            ],
+            "priority": [
+              "W",
+              "E",
+              "Q"
+            ],
+            "orderString": "W > E > Q"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8010,
+                "name": "Conquistador",
+                "path": "Styles/Precision/Conqueror/Conqueror.png"
+              },
+              "slots": [
+                "Claridad mental",
+                "Leyenda: Velocidad",
+                "Último esfuerzo"
+              ]
+            },
+            "secondary": {
+              "treeId": "resolve",
+              "treeName": "Valor",
+              "slots": [
+                "Fuerzas renovadas",
+                "Inquebrantable"
+              ]
+            },
+            "shards": [
+              "Fuerza Adaptable",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1054,
+              2003
+            ],
+            "boots": 3158,
+            "core": [
+              3152,
+              3158,
+              3100,
+              3157,
+              3089,
+              3135
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3916,
+              "componentName": "Orbe del Olvido",
+              "fullItemId": 3165,
+              "fullItemName": "Morellonomicón",
+              "trigger": "Rivales con vampirismo o curaciones masivas (Aatrox, Warwick, Soraka, Vlad)",
+              "tip": "Compra Orbe del Olvido (800g) en tu 2da vuelta a base; aplica Heridas Graves sin retrasar tu pico mítico."
+            },
+            "antiTank": {
+              "componentId": 3136,
+              "componentName": "Disfraz Encantado",
+              "fullItemId": 6653,
+              "fullItemName": "Tormento de Liandry",
+              "alternativeId": 3135,
+              "alternativeName": "Báculo del Vacío",
+              "trigger": "Rivales apilando vida y resistencia mágica (Ornn, Sion, ChoGath, Galio)",
+              "tip": "Liandry quema un % de la vida máxima cada segundo; añade Báculo del Vacío si superan 100 de RM."
+            },
+            "antiAssassin": {
+              "componentId": 2420,
+              "componentName": "Guardabrazo del Buscador",
+              "fullItemId": 3157,
+              "fullItemName": "Reloj de Arena de Zhonya",
+              "trigger": "Asesinos de burst físico o definitivo letal (Zed, Talon, Rengar, Blue Kayn)",
+              "tip": "La activa de Éxtasis (2.5s) anula completamente las definitivas de daño retardado."
+            }
+          }
+        }
+      }
+    },
+    "Zed": {
+      "championId": 238,
+      "key": "Zed",
+      "name": "Zed",
+      "damageType": "AD",
+      "primaryRole": "MIDDLE",
+      "archetype": "assassin",
+      "roles": {
+        "MIDDLE": {
+          "role": "MIDDLE",
+          "winRate": 51.1,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "orderString": "Q > E > W"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "inspiration",
+              "treeName": "Inspiración",
+              "keystone": {
+                "id": 8369,
+                "name": "Primer golpe",
+                "path": "Styles/Inspiration/FirstStrike/FirstStrike.png"
+              },
+              "slots": [
+                "Reembolso",
+                "Tónico triple",
+                "Manitas"
+              ]
+            },
+            "secondary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "slots": [
+                "Derribado",
+                "Leyenda: Velocidad"
+              ]
+            },
+            "shards": [
+              "Fuerza Adaptable",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1036,
+              2003,
+              2003,
+              2003
+            ],
+            "boots": 3158,
+            "core": [
+              3142,
+              3158,
+              6694,
+              6695,
+              3814,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "KogMaw": {
+      "championId": 96,
+      "key": "KogMaw",
+      "name": "Kog'Maw",
+      "damageType": "AD",
+      "primaryRole": "BOTTOM",
+      "archetype": "marksman",
+      "roles": {
+        "BOTTOM": {
+          "role": "BOTTOM",
+          "winRate": 52.8,
+          "skillOrder": {
+            "first3": [
+              "W",
+              "Q",
+              "E"
+            ],
+            "priority": [
+              "W",
+              "Q",
+              "E"
+            ],
+            "orderString": "W > Q > E"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8008,
+                "name": "Compás letal",
+                "path": "Styles/Precision/LethalTempo/LethalTempoTemp.png"
+              },
+              "slots": [
+                "Triunfo",
+                "Leyenda: Linaje",
+                "Último esfuerzo"
+              ]
+            },
+            "secondary": {
+              "treeId": "resolve",
+              "treeName": "Valor",
+              "slots": [
+                "Condicionamiento",
+                "Sobrecrecimiento"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1055,
+              2003
+            ],
+            "boots": 3006,
+            "core": [
+              3124,
+              3006,
+              3153,
+              3085,
+              3091,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Draven": {
+      "championId": 119,
+      "key": "Draven",
+      "name": "Draven",
+      "damageType": "AD",
+      "primaryRole": "BOTTOM",
+      "archetype": "marksman",
+      "roles": {
+        "BOTTOM": {
+          "role": "BOTTOM",
+          "winRate": 51.9,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "orderString": "Q > W > E"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8008,
+                "name": "Compás letal",
+                "path": "Styles/Precision/LethalTempo/LethalTempoTemp.png"
+              },
+              "slots": [
+                "Claridad mental",
+                "Leyenda: Presteza",
+                "Derribado"
+              ]
+            },
+            "secondary": {
+              "treeId": "inspiration",
+              "treeName": "Inspiración",
+              "slots": [
+                "Reembolso",
+                "Tónico triple"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Plana"
+            ]
+          },
+          "build": {
+            "start": [
+              1055,
+              2003
+            ],
+            "boots": 3006,
+            "core": [
+              3508,
+              3006,
+              3031,
+              3094,
+              3036,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Jinx": {
+      "championId": 222,
+      "key": "Jinx",
+      "name": "Jinx",
+      "damageType": "AD",
+      "primaryRole": "BOTTOM",
+      "archetype": "marksman",
+      "roles": {
+        "BOTTOM": {
+          "role": "BOTTOM",
+          "winRate": 51.8,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "orderString": "Q > W > E"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8008,
+                "name": "Compás letal",
+                "path": "Styles/Precision/LethalTempo/LethalTempoTemp.png"
+              },
+              "slots": [
+                "Claridad mental",
+                "Leyenda: Linaje",
+                "Derribado"
+              ]
+            },
+            "secondary": {
+              "treeId": "inspiration",
+              "treeName": "Inspiración",
+              "slots": [
+                "Reembolso",
+                "Tónico triple"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Plana"
+            ]
+          },
+          "build": {
+            "start": [
+              1055,
+              2003
+            ],
+            "boots": 3006,
+            "core": [
+              3006,
+              6672,
+              3085,
+              3031,
+              3036,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Caitlyn": {
+      "championId": 51,
+      "key": "Caitlyn",
+      "name": "Caitlyn",
+      "damageType": "AD",
+      "primaryRole": "BOTTOM",
+      "archetype": "marksman",
+      "roles": {
+        "BOTTOM": {
+          "role": "BOTTOM",
+          "winRate": 51.6,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "orderString": "Q > W > E"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "precision",
+              "treeName": "Precisión",
+              "keystone": {
+                "id": 8008,
+                "name": "Compás letal",
+                "path": "Styles/Precision/LethalTempo/LethalTempoTemp.png"
+              },
+              "slots": [
+                "Claridad mental",
+                "Leyenda: Linaje",
+                "Golpe de gracia"
+              ]
+            },
+            "secondary": {
+              "treeId": "sorcery",
+              "treeName": "Brujería",
+              "slots": [
+                "Concentración absoluta",
+                "Se avecina tormenta"
+              ]
+            },
+            "shards": [
+              "Velocidad de Ataque",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              1055,
+              2003
+            ],
+            "boots": 3006,
+            "core": [
+              3006,
+              6672,
+              3031,
+              3094,
+              3036,
+              3026
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3123,
+              "componentName": "Llamada del Verdugo",
+              "fullItemId": 3033,
+              "fullItemName": "Recordatorio Mortal",
+              "trigger": "Enemigos con robo de vida, regeneración o curanderos en bot lane",
+              "tip": "Llamada del Verdugo (800g) asegura ventaja en escaramuzas contra campeones de sustain."
+            },
+            "antiTank": {
+              "componentId": 3035,
+              "componentName": "Últimas Palabras",
+              "fullItemId": 3036,
+              "fullItemName": "Recuerdos de Lord Dominik",
+              "alternativeId": 3071,
+              "alternativeName": "Cuchilla Negra",
+              "trigger": "Frontline pesada con más de 150 de armadura y bonus de vida",
+              "tip": "Aporta penetración porcentual de armadura masiva que ignora defensas en peleas 5v5."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 6333,
+              "fullItemName": "Danza de la Muerte",
+              "alternativeId": 6673,
+              "alternativeName": "Arcoescudo Inmortal",
+              "trigger": "Asesinos y luchadores de ráfaga física (KhaZix, Qiyana, Zed, Talon)",
+              "tip": "Convierte el 30% del daño recibido en un sangrado temporal y cura tras lograr un derribo."
+            }
+          }
+        }
+      }
+    },
+    "Thresh": {
+      "championId": 412,
+      "key": "Thresh",
+      "name": "Thresh",
+      "damageType": "AD",
+      "primaryRole": "UTILITY",
+      "archetype": "tank",
+      "roles": {
+        "UTILITY": {
+          "role": "UTILITY",
+          "winRate": 51.5,
+          "skillOrder": {
+            "first3": [
+              "E",
+              "Q",
+              "W"
+            ],
+            "priority": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "orderString": "Q > W > E"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "resolve",
+              "treeName": "Valor",
+              "keystone": {
+                "id": 8439,
+                "name": "Reverberacción",
+                "path": "Styles/Resolve/VeteranAftershock/VeteranAftershock.png"
+              },
+              "slots": [
+                "Fuente de vida",
+                "Revestimiento de huesos",
+                "Inquebrantable"
+              ]
+            },
+            "secondary": {
+              "treeId": "inspiration",
+              "treeName": "Inspiración",
+              "slots": [
+                "Entrega de galletas",
+                "Perspicacia cósmica"
+              ]
+            },
+            "shards": [
+              "Fuerza Adaptable",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              3850,
+              2003
+            ],
+            "boots": 3117,
+            "core": [
+              3869,
+              3117,
+              3190,
+              3050,
+              3109,
+              3075
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3076,
+              "componentName": "Chaleco de Zarzas",
+              "fullItemId": 3075,
+              "fullItemName": "Cota de Espinas",
+              "trigger": "Duelistas de ataque básico continuo y curación (Irelia, Fiora, Trundle)",
+              "tip": "Chaleco de Zarzas (800g) devuelve daño mágico y corta curaciones al recibir golpes."
+            },
+            "antiTank": {
+              "componentId": 3068,
+              "componentName": "Capa de Fuego Solar",
+              "fullItemId": 3068,
+              "fullItemName": "Égida de Fuego Solar",
+              "alternativeId": 4401,
+              "alternativeName": "Fuerza de la Naturaleza",
+              "trigger": "Duelo prolongado de tanques en línea o control de objetivos",
+              "tip": "Aumenta el daño de quemadura en área mientras más dure el intercambio de golpes."
+            },
+            "antiAssassin": {
+              "componentId": 3047,
+              "componentName": "Quijotes Blindados",
+              "fullItemId": 3190,
+              "fullItemName": "Relicario de los Solari de Hierro",
+              "trigger": "Asesinos buscando eliminar a tus carries desprotegidos",
+              "tip": "Provee un escudo grupal instantáneo y reducción pasiva del 12% a ataques básicos."
+            }
+          }
+        }
+      }
+    },
+    "Leona": {
+      "championId": 89,
+      "key": "Leona",
+      "name": "Leona",
+      "damageType": "AP",
+      "primaryRole": "UTILITY",
+      "archetype": "tank",
+      "roles": {
+        "UTILITY": {
+          "role": "UTILITY",
+          "winRate": 51.9,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "E",
+              "W"
+            ],
+            "priority": [
+              "W",
+              "E",
+              "Q"
+            ],
+            "orderString": "W > E > Q"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "resolve",
+              "treeName": "Valor",
+              "keystone": {
+                "id": 8439,
+                "name": "Reverberacción",
+                "path": "Styles/Resolve/VeteranAftershock/VeteranAftershock.png"
+              },
+              "slots": [
+                "Fuente de vida",
+                "Revestimiento de huesos",
+                "Inquebrantable"
+              ]
+            },
+            "secondary": {
+              "treeId": "inspiration",
+              "treeName": "Inspiración",
+              "slots": [
+                "Entrega de galletas",
+                "Perspicacia cósmica"
+              ]
+            },
+            "shards": [
+              "Aceleración de Habilidad",
+              "Vida Escalable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              3854,
+              2003
+            ],
+            "boots": 3047,
+            "core": [
+              3869,
+              3047,
+              3190,
+              3050,
+              3075,
+              3109
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3916,
+              "componentName": "Orbe del Olvido",
+              "fullItemId": 3165,
+              "fullItemName": "Morellonomicón",
+              "trigger": "Rivales con vampirismo o curaciones masivas (Aatrox, Warwick, Soraka, Vlad)",
+              "tip": "Compra Orbe del Olvido (800g) en tu 2da vuelta a base; aplica Heridas Graves sin retrasar tu pico mítico."
+            },
+            "antiTank": {
+              "componentId": 3136,
+              "componentName": "Disfraz Encantado",
+              "fullItemId": 6653,
+              "fullItemName": "Tormento de Liandry",
+              "alternativeId": 3135,
+              "alternativeName": "Báculo del Vacío",
+              "trigger": "Rivales apilando vida y resistencia mágica (Ornn, Sion, ChoGath, Galio)",
+              "tip": "Liandry quema un % de la vida máxima cada segundo; añade Báculo del Vacío si superan 100 de RM."
+            },
+            "antiAssassin": {
+              "componentId": 2420,
+              "componentName": "Guardabrazo del Buscador",
+              "fullItemId": 3157,
+              "fullItemName": "Reloj de Arena de Zhonya",
+              "trigger": "Asesinos de burst físico o definitivo letal (Zed, Talon, Rengar, Blue Kayn)",
+              "tip": "La activa de Éxtasis (2.5s) anula completamente las definitivas de daño retardado."
+            }
+          }
+        }
+      }
+    },
+    "Nautilus": {
+      "championId": 111,
+      "key": "Nautilus",
+      "name": "Nautilus",
+      "damageType": "AP",
+      "primaryRole": "UTILITY",
+      "archetype": "tank",
+      "roles": {
+        "UTILITY": {
+          "role": "UTILITY",
+          "winRate": 51.2,
+          "skillOrder": {
+            "first3": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "priority": [
+              "Q",
+              "W",
+              "E"
+            ],
+            "orderString": "Q > W > E"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "resolve",
+              "treeName": "Valor",
+              "keystone": {
+                "id": 8439,
+                "name": "Reverberacción",
+                "path": "Styles/Resolve/VeteranAftershock/VeteranAftershock.png"
+              },
+              "slots": [
+                "Golpe de escudo",
+                "Revestimiento de huesos",
+                "Inquebrantable"
+              ]
+            },
+            "secondary": {
+              "treeId": "inspiration",
+              "treeName": "Inspiración",
+              "slots": [
+                "Entrega de galletas",
+                "Perspicacia cósmica"
+              ]
+            },
+            "shards": [
+              "Aceleración de Habilidad",
+              "Vida Escalable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              3854,
+              2003
+            ],
+            "boots": 3117,
+            "core": [
+              3869,
+              3117,
+              3190,
+              3050,
+              3075,
+              3110
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3916,
+              "componentName": "Orbe del Olvido",
+              "fullItemId": 3165,
+              "fullItemName": "Morellonomicón",
+              "trigger": "Rivales con vampirismo o curaciones masivas (Aatrox, Warwick, Soraka, Vlad)",
+              "tip": "Compra Orbe del Olvido (800g) en tu 2da vuelta a base; aplica Heridas Graves sin retrasar tu pico mítico."
+            },
+            "antiTank": {
+              "componentId": 3136,
+              "componentName": "Disfraz Encantado",
+              "fullItemId": 6653,
+              "fullItemName": "Tormento de Liandry",
+              "alternativeId": 3135,
+              "alternativeName": "Báculo del Vacío",
+              "trigger": "Rivales apilando vida y resistencia mágica (Ornn, Sion, ChoGath, Galio)",
+              "tip": "Liandry quema un % de la vida máxima cada segundo; añade Báculo del Vacío si superan 100 de RM."
+            },
+            "antiAssassin": {
+              "componentId": 2420,
+              "componentName": "Guardabrazo del Buscador",
+              "fullItemId": 3157,
+              "fullItemName": "Reloj de Arena de Zhonya",
+              "trigger": "Asesinos de burst físico o definitivo letal (Zed, Talon, Rengar, Blue Kayn)",
+              "tip": "La activa de Éxtasis (2.5s) anula completamente las definitivas de daño retardado."
+            }
+          }
+        }
+      }
+    },
+    "Lux": {
+      "championId": 99,
+      "key": "Lux",
+      "name": "Lux",
+      "damageType": "AP",
+      "primaryRole": "UTILITY",
+      "archetype": "mage",
+      "roles": {
+        "UTILITY": {
+          "role": "UTILITY",
+          "winRate": 51.7,
+          "skillOrder": {
+            "first3": [
+              "E",
+              "Q",
+              "W"
+            ],
+            "priority": [
+              "E",
+              "Q",
+              "W"
+            ],
+            "orderString": "E > Q > W"
+          },
+          "runes": {
+            "primary": {
+              "treeId": "sorcery",
+              "treeName": "Brujería",
+              "keystone": {
+                "id": 8229,
+                "name": "Cometa arcano",
+                "path": "Styles/Sorcery/ArcaneComet/ArcaneComet.png"
+              },
+              "slots": [
+                "Banda de maná",
+                "Trascendencia",
+                "Piroláser"
+              ]
+            },
+            "secondary": {
+              "treeId": "domination",
+              "treeName": "Dominación",
+              "slots": [
+                "Golpe bajo",
+                "Cazador definitivo"
+              ]
+            },
+            "shards": [
+              "Fuerza Adaptable",
+              "Fuerza Adaptable",
+              "Vida Escalable"
+            ]
+          },
+          "build": {
+            "start": [
+              3850,
+              2003
+            ],
+            "boots": 3020,
+            "core": [
+              3869,
+              3020,
+              6655,
+              4645,
+              3089,
+              3135
+            ]
+          },
+          "tacticalRules": {
+            "antiHeal": {
+              "componentId": 3916,
+              "componentName": "Orbe del Olvido",
+              "fullItemId": 3165,
+              "fullItemName": "Morellonomicón",
+              "trigger": "Rivales con vampirismo o curaciones masivas (Aatrox, Warwick, Soraka, Vlad)",
+              "tip": "Compra Orbe del Olvido (800g) en tu 2da vuelta a base; aplica Heridas Graves sin retrasar tu pico mítico."
+            },
+            "antiTank": {
+              "componentId": 3136,
+              "componentName": "Disfraz Encantado",
+              "fullItemId": 6653,
+              "fullItemName": "Tormento de Liandry",
+              "alternativeId": 3135,
+              "alternativeName": "Báculo del Vacío",
+              "trigger": "Rivales apilando vida y resistencia mágica (Ornn, Sion, ChoGath, Galio)",
+              "tip": "Liandry quema un % de la vida máxima cada segundo; añade Báculo del Vacío si superan 100 de RM."
+            },
+            "antiAssassin": {
+              "componentId": 2420,
+              "componentName": "Guardabrazo del Buscador",
+              "fullItemId": 3157,
+              "fullItemName": "Reloj de Arena de Zhonya",
+              "trigger": "Asesinos de burst físico o definitivo letal (Zed, Talon, Rengar, Blue Kayn)",
+              "tip": "La activa de Éxtasis (2.5s) anula completamente las definitivas de daño retardado."
+            }
+          }
+        }
+      }
+    }
+  }
+}
