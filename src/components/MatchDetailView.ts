@@ -338,7 +338,7 @@ function renderMetricCards(s: MatchDetailState): string {
         <h3 class="section-title">Desglose de Rendimiento Estadístico</h3>
         <p class="section-sub">Comparativa individual de tu impacto contra el promedio de invocadores en tu Elo.</p>
       </div>
-      <span class="chip chip-gold">${icon('spark', 11)} Itero Analytics</span>
+      <span class="chip chip-gold">${icon('spark', 11)} Análisis Avanzado</span>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

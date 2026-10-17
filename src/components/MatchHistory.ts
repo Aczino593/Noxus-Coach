@@ -4,7 +4,7 @@ import {
 } from '../lib/ui';
 import { profileImg } from '../lib/assets';
 import { scale, smoothPath, type Pt } from '../lib/charts';
-import { fetchSummonerProfile } from '../data/api';
+import { fetchSummonerProfile, type AggregatedDataResult } from '../data/api';
 import { mountMatchDetailView } from './MatchDetailView';
 import {
   ACCOUNT, LAST_10, LP_BANDS, LP_SERIES, QUEUE_LABEL, REGIONS, SUMMARY, type Match, type Account,
@@ -25,6 +25,7 @@ interface State {
   account: Account;
   isLive: boolean;
   apiNotice?: string;
+  aggregated?: AggregatedDataResult;
 }
 
 const QUEUES: Queue[] = ['solo', 'flex', 'quick', 'clash'];
@@ -102,6 +103,78 @@ function filters(s: State): string {
   }`;
 }
 
+/* ─────────────── Widget: Rendimiento Agrupado Header ─────────────── */
+function performanceOverviewHeader(s: State): string {
+  if (s.loading || !s.aggregated) return '';
+
+  const agg = s.aggregated;
+  const most = agg.mostPlayedChampion;
+  const best = agg.bestKdaChampion;
+  const worst = agg.worstKdaChampion;
+  const glob = agg.globalMetrics;
+
+  return `
+  <div class="mt-3 card p-4 border border-line bg-canvas">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-crimson animate-pulse"></span>
+        <span class="text-[12.5px] font-bold uppercase tracking-wider text-ink">Rendimiento Agrupado · Resumen de Clasificatorias</span>
+        <span class="chip !py-0 !px-1.5 text-[10px] text-ink-dim">Últimas ${glob.totalMatches} partidas</span>
+      </div>
+      <div class="flex items-center gap-3 text-[11.5px] text-ink-dim">
+        <span>WR: <strong class="${glob.winRate >= 50 ? 'text-win' : 'text-loss'} font-bold">${glob.winRate}%</strong> (${glob.totalWins}V ${glob.totalLosses}D)</span>
+        <span class="h-3 w-px bg-line"></span>
+        <span>KDA: <strong class="text-ink font-bold">${glob.overallKda.toFixed(2)}</strong></span>
+        <span class="h-3 w-px bg-line"></span>
+        <span>CS/m: <strong class="text-gold font-bold">${glob.avgCsPerMin.toFixed(1)}</strong></span>
+        <span class="h-3 w-px bg-line"></span>
+        <span>Pinks: <strong class="text-ink font-bold">${glob.avgControlWards.toFixed(1)}/p</strong></span>
+      </div>
+    </div>
+
+    <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <!-- Más Jugado -->
+      <div class="card-inset p-3 flex items-center gap-3">
+        ${most ? champIcon(most.champion, 42) : '<div class="w-10 h-10 rounded-xl bg-canvas border border-line"></div>'}
+        <div class="flex-1 min-w-0 leading-tight">
+          <div class="text-[10px] font-bold uppercase text-ink-dim tracking-wider">Más Jugado</div>
+          <div class="text-[13px] font-bold text-ink truncate mt-0.5">${most ? esc(most.championName) : 'Sin datos'}</div>
+          <div class="mt-1 flex items-center gap-2 text-[11px]">
+            <span class="chip ${most && most.winRate >= 50 ? 'chip-win' : 'chip-loss'} !py-0 !px-1.5 font-bold">${most ? most.winRate : 0}% WR</span>
+            <span class="text-ink-mute">${most ? most.count : 0} partidas</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mejor KDA -->
+      <div class="card-inset p-3 flex items-center gap-3 border border-win/20 bg-win/5">
+        ${best ? champIcon(best.champion, 42) : '<div class="w-10 h-10 rounded-xl bg-canvas border border-line"></div>'}
+        <div class="flex-1 min-w-0 leading-tight">
+          <div class="text-[10px] font-bold uppercase text-win tracking-wider">Mejor KDA</div>
+          <div class="text-[13px] font-bold text-ink truncate mt-0.5">${best ? esc(best.championName) : 'Sin datos'}</div>
+          <div class="mt-1 flex items-center gap-2 text-[11px]">
+            <span class="num font-bold text-win">${best ? best.kdaRatio.toFixed(1) : 0} KDA</span>
+            <span class="text-ink-mute">${best ? `${best.winRate}% WR (${best.count}p)` : ''}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Peor KDA -->
+      <div class="card-inset p-3 flex items-center gap-3 border border-loss/20 bg-loss/5">
+        ${worst ? champIcon(worst.champion, 42) : '<div class="w-10 h-10 rounded-xl bg-canvas border border-line"></div>'}
+        <div class="flex-1 min-w-0 leading-tight">
+          <div class="text-[10px] font-bold uppercase text-loss tracking-wider">Menor KDA</div>
+          <div class="text-[13px] font-bold text-ink truncate mt-0.5">${worst ? esc(worst.championName) : 'Sin datos'}</div>
+          <div class="mt-1 flex items-center gap-2 text-[11px]">
+            <span class="num font-bold text-loss">${worst ? worst.kdaRatio.toFixed(1) : 0} KDA</span>
+            <span class="text-ink-mute">${worst ? `${worst.winRate}% WR (${worst.count}p)` : ''}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ─────────────── Widget: partidas + racha + campeones ─────────────── */
 function summary(s: State, list: Match[]): string {
   if (s.loading) {
@@ -113,9 +186,26 @@ function summary(s: State, list: Match[]): string {
   }
   const solo = s.queue === 'solo';
   const wins = list.filter((m) => m.result === 'win').length;
-  const games = solo ? SUMMARY.games : list.length;
-  const wr = solo ? SUMMARY.winrate : list.length ? (wins / list.length) * 100 : 0;
-  const w10 = LAST_10.filter((r) => r === 'W').length;
+  const games = s.aggregated?.globalMetrics?.totalMatches ?? (solo ? SUMMARY.games : list.length);
+  const wr = s.aggregated?.globalMetrics?.winRate ?? (solo ? SUMMARY.winrate : list.length ? (wins / list.length) * 100 : 0);
+  const recent = list.slice(0, 10);
+  const w10 = recent.filter((m) => m.result === 'win').length;
+  const l10 = recent.length - w10;
+  const recentResults = recent.map((m) => (m.result === 'win' ? 'W' : 'L'));
+
+  const champList = (s.aggregated?.championStats && s.aggregated.championStats.length > 0)
+    ? s.aggregated.championStats.slice(0, 3).map((c) => ({
+        champ: c.champion,
+        w: c.wins,
+        l: c.losses,
+        r: c.winRate,
+      }))
+    : SUMMARY.champs.map((c) => {
+        const total = c.w + c.l;
+        const r = total ? Math.round((c.w / total) * 100) : 0;
+        return { champ: c.id, w: c.w, l: c.l, r };
+      });
+
   return `
   <div class="card p-4">
     <div class="grid grid-cols-2 gap-3">
@@ -130,23 +220,21 @@ function summary(s: State, list: Match[]): string {
     </div>
     <div class="mt-5">
       <div class="mb-2 flex items-center justify-between text-[12px]">
-        <span class="text-ink-dim">Últimas 10 partidas</span>
-        <span class="num font-bold"><span class="text-win">${w10}V</span> <span class="text-loss">${10 - w10}D</span></span>
+        <span class="text-ink-dim">Últimas ${recent.length || 10} partidas</span>
+        <span class="num font-bold"><span class="text-win">${w10}V</span> <span class="text-loss">${l10}D</span></span>
       </div>
-      <div class="grid grid-cols-10 gap-1" role="img" aria-label="Racha de las últimas 10 partidas">
-        ${LAST_10.map((r) => `<span class="h-2 rounded-full" style="background:${r === 'W' ? 'var(--color-win)' : 'var(--color-loss)'};${r === 'W' ? 'box-shadow:0 0 8px -1px rgb(16 185 129 / .6)' : ''}"></span>`).join('')}
+      <div class="grid grid-cols-10 gap-1" role="img" aria-label="Racha de partidas recientes">
+        ${(recentResults.length ? recentResults : LAST_10).map((r) => `<span class="h-2 rounded-full" style="background:${r === 'W' ? 'var(--color-win)' : 'var(--color-loss)'};${r === 'W' ? 'box-shadow:0 0 8px -1px rgb(16 185 129 / .6)' : ''}"></span>`).join('')}
       </div>
     </div>
     <div class="mt-4 grid grid-cols-3 gap-2">
-      ${SUMMARY.champs
+      ${champList
         .map((c) => {
-          const total = c.w + c.l;
-          const r = total ? Math.round((c.w / total) * 100) : 0;
           return `<div class="card-inset flex items-center gap-2 p-1.5">
-            ${champIcon(c.id, 34)}
+            ${champIcon(c.champ, 34)}
             <div class="leading-tight">
               <div class="num text-[11px]"><span class="text-win">${c.w}V</span> <span class="text-loss">${c.l}D</span></div>
-              <div class="num text-[11px] font-semibold ${r >= 50 ? 'text-gold' : 'text-ink-mute'}">${r}%</div>
+              <div class="num text-[11px] font-semibold ${c.r >= 50 ? 'text-gold' : 'text-ink-mute'}">${c.r}%</div>
             </div>
           </div>`;
         })
@@ -295,6 +383,7 @@ export function mountMatchHistory(root: HTMLElement) {
       return `
         ${searchBar(s)}
         ${filters(s)}
+        ${performanceOverviewHeader(s)}
         <div class="mt-4 grid items-stretch gap-4" style="grid-template-columns:minmax(330px,0.9fr) minmax(0,1.6fr)">
           ${summary(s, list)}
           ${lpChart(s)}
@@ -303,7 +392,11 @@ export function mountMatchHistory(root: HTMLElement) {
     },
     actions: {
       'select-match': ({ data }) => ({ selectedMatchId: data.id || null }),
-      queue: ({ data }) => ({ queue: data.id as Queue, expanded: null }),
+      queue: ({ data, view }) => {
+        const q = data.id as Queue;
+        view.set({ queue: q, expanded: null });
+        void load(view);
+      },
       role: ({ data }) => ({ role: data.id as Role | 'all', expanded: null }),
       'champ-panel': ({ state }) => ({ champPanel: !state.champPanel }),
       champ: ({ data }) => ({ champ: data.id || null, expanded: null }),
@@ -365,12 +458,14 @@ export function mountMatchHistory(root: HTMLElement) {
   async function load(v: View<State>) {
     v.set({ loading: true, expanded: null });
     const s = v.state;
-    const res = await fetchSummonerProfile(s.searched.name, s.searched.tag, s.searched.region);
+    const queueId = s.queue === 'solo' ? 420 : s.queue === 'flex' ? 440 : undefined;
+    const res = await fetchSummonerProfile(s.searched.name, s.searched.tag, s.searched.region, 20, queueId);
     v.set({
       matches: res.matches,
       account: res.account,
       isLive: res.isLive,
       apiNotice: res.error,
+      aggregated: res.aggregated,
       loading: false,
     });
   }

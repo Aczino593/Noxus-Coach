@@ -1,6 +1,12 @@
 import { createView, type View } from '../lib/view';
-import { champIcon, gauge, icon, itemIcon, pct, roleIcon, sk, statBar, tierColor } from '../lib/ui';
-import { fetchAccountStats, fetchMatches } from '../data/api';
+import { champIcon, esc, gauge, icon, itemIcon, pct, roleIcon, sk, statBar, tierColor } from '../lib/ui';
+import {
+  fetchAccountStats,
+  fetchMatches,
+  getLastAggregatedData,
+  masterGatherData,
+  type AggregatedDataResult,
+} from '../data/api';
 import { fetchDetailedMatch, type DetailedMatch } from '../data/matchDetail';
 import {
   farmReport,
@@ -12,7 +18,7 @@ import {
   type FarmReport,
   type VisionReport,
 } from '../lib/fundamentals';
-import { EARLY_AGGRESSION, KILL_TARGETS, TEAM_SHARES, type Match, type StatGroup } from '../data/mock';
+import { ACCOUNT, EARLY_AGGRESSION, KILL_TARGETS, TEAM_SHARES, type Match, type StatGroup } from '../data/mock';
 import { ROLE_LABEL } from '../types';
 
 interface State {
@@ -21,6 +27,8 @@ interface State {
   selectedMatchId: string;
   detailedMatch: DetailedMatch | null;
   groups: StatGroup[];
+  aggregated: AggregatedDataResult | null;
+  filterMinGames: boolean;
 }
 
 function panel(title: string, sub: string, body: string, extra = ''): string {
@@ -288,6 +296,182 @@ function teamShares(loading: boolean): string {
   return panel('Participación en el Equipo', 'Porcentaje de Daño, Oro y Experiencia que aportas al total del equipo.', body);
 }
 
+/* ─────────────── Resumen: Campeón más jugado, mejor y peor KDA ─────────────── */
+function championHighlightsSummary(s: State): string {
+  if (s.loading || !s.aggregated) {
+    return `
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      ${Array.from({ length: 4 }, () => sk('h-24 w-full !rounded-xl')).join('')}
+    </div>`;
+  }
+
+  const agg = s.aggregated;
+  const most = agg.mostPlayedChampion;
+  const best = agg.bestKdaChampion;
+  const worst = agg.worstKdaChampion;
+  const glob = agg.globalMetrics;
+
+  return `
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+    <!-- Más Jugado -->
+    <div class="card p-3.5 border border-line bg-canvas flex items-center gap-3.5 shadow-sm">
+      ${most ? champIcon(most.champion, 48) : '<div class="w-12 h-12 rounded-xl bg-canvas border border-line"></div>'}
+      <div class="min-w-0 flex-1 leading-tight">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Más Jugado</div>
+        <div class="text-[14px] font-bold text-ink truncate mt-0.5">${most ? esc(most.championName) : 'Sin datos'}</div>
+        <div class="mt-1 flex items-center gap-2 text-[11.5px]">
+          <span class="chip ${most && most.winRate >= 50 ? 'chip-win' : 'chip-loss'} !py-0 !px-1.5 font-bold">${most ? most.winRate : 0}% WR</span>
+          <span class="text-ink-mute text-[11px]">${most ? most.count : 0} partidas</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mejor KDA -->
+    <div class="card p-3.5 border border-win/30 bg-win/5 flex items-center gap-3.5 shadow-sm">
+      ${best ? champIcon(best.champion, 48) : '<div class="w-12 h-12 rounded-xl bg-canvas border border-line"></div>'}
+      <div class="min-w-0 flex-1 leading-tight">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-win">Mejor KDA</div>
+        <div class="text-[14px] font-bold text-ink truncate mt-0.5">${best ? esc(best.championName) : 'Sin datos'}</div>
+        <div class="mt-1 flex items-center gap-2 text-[11.5px]">
+          <span class="num font-extrabold text-win">${best ? best.kdaRatio.toFixed(1) : 0} KDA</span>
+          <span class="text-ink-mute text-[11px]">${best ? `${best.winRate}% WR (${best.count}p)` : ''}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menor KDA -->
+    <div class="card p-3.5 border border-loss/30 bg-loss/5 flex items-center gap-3.5 shadow-sm">
+      ${worst ? champIcon(worst.champion, 48) : '<div class="w-12 h-12 rounded-xl bg-canvas border border-line"></div>'}
+      <div class="min-w-0 flex-1 leading-tight">
+        <div class="text-[10px] font-bold uppercase tracking-wider text-loss">Menor KDA</div>
+        <div class="text-[14px] font-bold text-ink truncate mt-0.5">${worst ? esc(worst.championName) : 'Sin datos'}</div>
+        <div class="mt-1 flex items-center gap-2 text-[11.5px]">
+          <span class="num font-extrabold text-loss">${worst ? worst.kdaRatio.toFixed(1) : 0} KDA</span>
+          <span class="text-ink-mute text-[11px]">${worst ? `${worst.winRate}% WR (${worst.count}p)` : ''}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Promedios Clasificatorios -->
+    <div class="card p-3.5 border border-line bg-canvas flex flex-col justify-center leading-tight shadow-sm">
+      <div class="text-[10px] font-bold uppercase tracking-wider text-ink-dim">Medias Clasificatorias</div>
+      <div class="mt-1.5 flex items-baseline justify-between">
+        <span class="text-[12px] text-ink-dim">CS/min:</span>
+        <span class="num text-[13.5px] font-extrabold text-gold">${glob.avgCsPerMin.toFixed(1)} CS/m</span>
+      </div>
+      <div class="mt-1 flex items-baseline justify-between">
+        <span class="text-[12px] text-ink-dim">Pinks/partida:</span>
+        <span class="num text-[13.5px] font-extrabold text-ink">${glob.avgControlWards.toFixed(1)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ─────────────── Tabla Agrupada de Campeones estilo DataFrame ─────────────── */
+function championTableSection(s: State): string {
+  if (s.loading || !s.aggregated) {
+    return `<div class="card p-5">${sk('h-40 w-full')}</div>`;
+  }
+
+  const allChamps = s.aggregated.championStats;
+  const filtered = s.filterMinGames
+    ? allChamps.filter((c) => c.count >= 2)
+    : allChamps;
+
+  const displayList = filtered.length > 0 ? filtered : allChamps;
+
+  return `
+  <section class="card p-5 border-line">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="text-crimson">${icon('chart', 17)}</span>
+          <h3 class="section-title">Estadísticas Agrupadas por Campeón</h3>
+        </div>
+        <p class="section-sub mt-0.5">Agrupación estilo DataFrame <code class="text-[11px] bg-canvas px-1.5 py-0.5 rounded border border-line">groupby('champion')</code> de tus partidas clasificatorias.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="pill !h-8 !px-3 text-[11.5px] ${s.filterMinGames ? '!border-crimson !bg-crimson/15 text-white font-bold' : ''}"
+                data-action="toggleFilterMinGames">
+          ${icon('sliders', 12)}
+          <span>${s.filterMinGames ? 'Filtrado: ≥ 2 partidas' : 'Mostrando: Todos'}</span>
+        </button>
+      </div>
+    </div>
+
+    ${!displayList.length ? `
+      <div class="py-12 text-center text-ink-dim">No hay campeones registrados con los criterios actuales.</div>
+    ` : `
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full text-left text-[12.5px] border-collapse">
+          <thead>
+            <tr class="border-b border-line text-[11px] font-bold uppercase tracking-wider text-ink-dim">
+              <th class="py-2.5 px-3">Campeón</th>
+              <th class="py-2.5 px-3 text-center">Partidas</th>
+              <th class="py-2.5 px-3 text-center">V / D</th>
+              <th class="py-2.5 px-3" style="min-width:140px">Win Rate</th>
+              <th class="py-2.5 px-3 text-center">KDA</th>
+              <th class="py-2.5 px-3 text-center">CS / Min</th>
+              <th class="py-2.5 px-3 text-center">Mejor Racha</th>
+              <th class="py-2.5 px-3 text-center">Wards Control</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-line/60">
+            ${displayList.map((c) => {
+              const wrColor = c.winRate >= 55 ? 'text-win font-bold' : c.winRate < 48 ? 'text-loss font-semibold' : 'text-ink font-semibold';
+              const csColor = c.csPerMin >= 7.0 ? 'text-win font-bold' : c.csPerMin >= 5.0 ? 'text-[#f5b942] font-semibold' : 'text-loss font-semibold';
+
+              return `
+              <tr class="hover:bg-canvas/60 transition-colors">
+                <td class="py-2.5 px-3">
+                  <div class="flex items-center gap-2.5">
+                    ${champIcon(c.champion, 32)}
+                    <div>
+                      <div class="font-bold text-ink text-[13px] leading-tight">${esc(c.championName)}</div>
+                      <div class="text-[10px] text-ink-mute">${esc(c.champion)}</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-2.5 px-3 text-center">
+                  <span class="chip !py-0.5 !px-2 font-bold">${c.count}</span>
+                </td>
+                <td class="py-2.5 px-3 text-center text-[11.5px]">
+                  <span class="text-win font-bold">${c.wins}V</span> <span class="text-ink-mute">-</span> <span class="text-loss font-bold">${c.losses}D</span>
+                </td>
+                <td class="py-2.5 px-3">
+                  <div class="flex items-center gap-2.5">
+                    <span class="num text-[12.5px] ${wrColor} w-10 text-right">${c.winRate}%</span>
+                    <div class="flex-1 h-2 rounded-full bg-canvas border border-line overflow-hidden">
+                      <div class="h-full rounded-full transition-all"
+                           style="width:${c.winRate}%;background:${c.winRate >= 50 ? 'var(--color-win)' : 'var(--color-loss)'}"></div>
+                    </div>
+                  </div>
+                </td>
+                <td class="py-2.5 px-3 text-center">
+                  <div class="num font-bold text-[13px] text-ink">${c.kdaRatio.toFixed(2)}</div>
+                  <div class="text-[10.5px] text-ink-mute">${c.avgKills}/${c.avgDeaths}/${c.avgAssists}</div>
+                </td>
+                <td class="py-2.5 px-3 text-center">
+                  <span class="num ${csColor} text-[13px]">${c.csPerMin.toFixed(1)}</span>
+                  <span class="text-[10px] text-ink-mute block">CS/m</span>
+                </td>
+                <td class="py-2.5 px-3 text-center">
+                  <span class="num font-extrabold text-gold text-[12.5px]">${c.highestKills}</span>
+                  <span class="text-[10px] text-ink-mute block">kills</span>
+                </td>
+                <td class="py-2.5 px-3 text-center">
+                  <span class="num font-bold text-ink text-[12.5px]">${c.controlWards}</span>
+                  <span class="text-[10px] text-ink-mute block">pinks</span>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `}
+  </section>`;
+}
+
 export function mountAccountStats(root: HTMLElement) {
   const view = createView<State>({
     root,
@@ -297,6 +481,8 @@ export function mountAccountStats(root: HTMLElement) {
       selectedMatchId: 'm1',
       detailedMatch: null,
       groups: [],
+      aggregated: null,
+      filterMinGames: true,
     },
     render: (s) => {
       if (s.loading || !s.detailedMatch) {
@@ -324,12 +510,18 @@ export function mountAccountStats(root: HTMLElement) {
 
       return `
       <div class="space-y-4">
-        <!-- Barra Superior: Selector de Partida para Diagnóstico de Fundamentos -->
+        <!-- SECCIÓN 1: RESUMEN DE CAMPEONES DESTACADOS (MÁS JUGADO, MEJOR/PEOR KDA, MEDIAS) -->
+        ${championHighlightsSummary(s)}
+
+        <!-- SECCIÓN 2: TABLA DE CAMPEONES AGREGADOS (GROUPBY CHAMPION) -->
+        ${championTableSection(s)}
+
+        <!-- SECCIÓN 3: SELECTOR DE PARTIDA COMPETITIVA PARA DIAGNÓSTICO -->
         <div class="card p-3.5 flex flex-wrap items-center justify-between gap-3">
           <div class="flex items-center gap-3">
-            <span class="eyebrow text-crimson">Diagnóstico de Partida:</span>
+            <span class="eyebrow text-crimson">Diagnóstico de Partida (Fundamentos):</span>
             <div class="flex flex-wrap items-center gap-2">
-              ${s.matches.slice(0, 5).map((m) => {
+              ${s.matches.slice(0, 8).map((m) => {
                 const active = m.id === s.selectedMatchId;
                 const isWin = m.result === 'win';
                 return `
@@ -350,13 +542,13 @@ export function mountAccountStats(root: HTMLElement) {
           </div>
         </div>
 
-        <!-- SECCIÓN PRINCIPAL: LOS 2 FUNDAMENTOS CLAVE (CS + VISIÓN) -->
+        <!-- SECCIÓN 4: LOS 2 FUNDAMENTOS CLAVE (CS + VISIÓN) ALIMENTADOS CON DATOS REALES -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           ${farmCard(farm, dm.durationSec)}
           ${visionCard(vision, dm.durationSec, ROLE_LABEL[me.role])}
         </div>
 
-        <!-- SECCIÓN SECUNDARIA: AGRESIVIDAD, PARTICIPACIÓN Y PERCENTILES -->
+        <!-- SECCIÓN 5: AGRESIVIDAD, PARTICIPACIÓN Y PERCENTILES -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
           ${summary(s)}
           <div class="grid gap-4">
@@ -372,9 +564,14 @@ export function mountAccountStats(root: HTMLElement) {
         const id = data.id as string;
         if (id === state.selectedMatchId) return;
         v.set({ selectedMatchId: id });
-        const detailed = await fetchDetailedMatch(id, 'LAS');
+        const reg = state.aggregated?.account.region || 'LAS';
+        const name = state.aggregated?.account.name || ACCOUNT.name;
+        const detailed = await fetchDetailedMatch(id, reg, name);
         v.set({ detailedMatch: detailed });
       },
+      toggleFilterMinGames: ({ state }) => ({
+        filterMinGames: !state.filterMinGames,
+      }),
       reload: ({ view: v }) => {
         void load(v);
       },
@@ -383,17 +580,22 @@ export function mountAccountStats(root: HTMLElement) {
 
   async function load(v: View<State>) {
     v.set({ loading: true });
-    const [matches, groups] = await Promise.all([
-      fetchMatches(),
-      fetchAccountStats(),
-    ]);
+
+    let agg = getLastAggregatedData();
+    if (!agg || !agg.championStats.length) {
+      agg = await masterGatherData(ACCOUNT.name, ACCOUNT.tag, ACCOUNT.region, 20, 420);
+    }
+
+    const matches = agg.matches.length > 0 ? agg.matches : await fetchMatches();
+    const groups = await fetchAccountStats();
 
     const targetMatchId = matches[0]?.id || 'm1';
-    const detailed = await fetchDetailedMatch(targetMatchId, 'LAS');
+    const detailed = await fetchDetailedMatch(targetMatchId, agg.account.region, agg.account.name);
 
     v.set({
       matches,
       groups,
+      aggregated: agg,
       selectedMatchId: targetMatchId,
       detailedMatch: detailed,
       loading: false,

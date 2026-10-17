@@ -173,7 +173,7 @@ function collapse(s: State, key: string, title: string, tip: string, headValue: 
 const sectionHeader = (t: string) =>
   `<div class="rounded-lg border border-crimson/60 py-1.5 text-center text-[13px] font-bold text-crimson" style="background:linear-gradient(180deg, rgb(255 46 77 / .1), transparent)">${t}</div>`;
 
-/** Pareja de círculos como en Itero: campeón activo (tenue) + el otro con anillo de color */
+/** Pareja de círculos de selección: campeón activo (tenue) + el otro con anillo de color */
 function pair(selId: string | null, otherId: string | null, color: string, role: Role | null, value: string): string {
   const ring = (id: string | null, col: string, dim = false) =>
     id
