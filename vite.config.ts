@@ -41,7 +41,7 @@ function riotApiProxyPlugin(defaultApiKey: string): Plugin {
             headers: {
               'X-Riot-Token': effectiveKey,
               Accept: 'application/json',
-              'User-Agent': 'IteroNoxus/1.0',
+              'User-Agent': 'NoxusCoach/1.0',
             },
           },
           (proxyRes) => {
@@ -71,7 +71,7 @@ function riotApiProxyPlugin(defaultApiKey: string): Plugin {
 // Puerto fijo: Tauri lo referencia en src-tauri/tauri.conf.json (devUrl).
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const riotApiKey = env.VITE_RIOT_API_KEY || 'RGAPI-e14cf219-ab3b-4d6c-9fbc-575fe48d39ff';
+  const riotApiKey = env.VITE_RIOT_API_KEY || '';
 
   return {
     plugins: [tailwindcss(), riotApiProxyPlugin(riotApiKey)],
