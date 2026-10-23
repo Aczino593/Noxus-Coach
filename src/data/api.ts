@@ -78,10 +78,10 @@ async function riotFetch<T>(routing: string, apiPath: string, maxRetries = 3): P
   const cleanPath = apiPath.startsWith('/') ? apiPath.slice(1) : apiPath;
   const key = getRiotApiKey();
 
-  const isDevOrLocal =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
-  const url = isDevOrLocal
+  // En entorno web (Vite dev local o Vercel), usamos el proxy /riot-api/ para evitar bloqueos de CORS.
+  // En la aplicación de escritorio nativa (Tauri), se consulta directo.
+  const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  const url = !inTauri
     ? `/riot-api/${routing}/${cleanPath}`
     : `https://${routing}.api.riotgames.com/${cleanPath}`;
 
