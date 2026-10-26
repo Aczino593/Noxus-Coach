@@ -2,6 +2,7 @@ import { createView } from '../lib/view';
 import { subnav } from '../lib/ui';
 import { mountMatchHistory } from './MatchHistory';
 import { mountAccountStats } from './AccountStats';
+import { mountChampionStats } from './ChampionStats';
 
 export type ProfileTab = 'history' | 'stats' | 'champs';
 
@@ -16,9 +17,6 @@ const TABS: { id: ProfileTab; label: string }[] = [
 ];
 
 export function mountProfileView(root: HTMLElement) {
-  let historyMounted = false;
-  let statsMounted = false;
-
   const view = createView<State>({
     root,
     state: { tab: 'history' },
@@ -26,13 +24,7 @@ export function mountProfileView(root: HTMLElement) {
       ${subnav(TABS, s.tab, 'tab')}
       <div id="profile-history-tab" class="${s.tab === 'history' ? '' : 'hidden'}"></div>
       <div id="profile-stats-tab" class="${s.tab === 'stats' ? '' : 'hidden'}"></div>
-      <div id="profile-champs-tab" class="${s.tab === 'champs' ? '' : 'hidden'}">
-        <div class="card grid place-items-center gap-2 py-20 text-center text-ink-dim">
-          <div class="text-[16px] font-bold text-ink">Estadísticas del Campeón</div>
-          <p class="max-w-[400px] text-[12.5px]">Selecciona o filtra un campeón en el historial para ver métricas acumuladas de daño, KDA, winrate por línea y runas más efectivas.</p>
-          <button class="btn btn-primary mt-2" data-action="tab" data-id="history">Ir a Historia de la partida</button>
-        </div>
-      </div>
+      <div id="profile-champs-tab" class="${s.tab === 'champs' ? '' : 'hidden'}"></div>
     `,
     actions: {
       tab: ({ data }) => {
@@ -43,14 +35,16 @@ export function mountProfileView(root: HTMLElement) {
     afterRender: (v) => {
       const histEl = root.querySelector<HTMLElement>('#profile-history-tab');
       const statsEl = root.querySelector<HTMLElement>('#profile-stats-tab');
+      const champsEl = root.querySelector<HTMLElement>('#profile-champs-tab');
 
-      if (histEl && !historyMounted) {
-        historyMounted = true;
+      if (histEl) {
         mountMatchHistory(histEl);
       }
-      if (statsEl && !statsMounted && v.state.tab === 'stats') {
-        statsMounted = true;
+      if (statsEl && v.state.tab === 'stats') {
         mountAccountStats(statsEl);
+      }
+      if (champsEl && v.state.tab === 'champs') {
+        mountChampionStats(champsEl);
       }
     },
   });
