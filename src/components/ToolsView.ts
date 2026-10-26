@@ -3,8 +3,10 @@ import { subnav } from '../lib/ui';
 import { mountBuildPlanner } from './BuildPlanner';
 import { mountDraftSimulator } from './DraftSimulator';
 import { mountVisionMap } from './VisionMap';
+import { mountChampionPool } from './ChampionPool';
+import { mountPatchAnalysis } from './PatchAnalysis';
 
-export type ToolsTab = 'builds' | 'vision' | 'draft' | 'pool';
+export type ToolsTab = 'builds' | 'vision' | 'draft' | 'pool' | 'patch';
 
 interface State {
   tab: ToolsTab;
@@ -15,13 +17,10 @@ const TABS: { id: ToolsTab; label: string }[] = [
   { id: 'vision', label: 'Mapa de Visión Interactivo' },
   { id: 'draft', label: 'Herramienta de Draft Estándar' },
   { id: 'pool', label: 'Constructor de Champion Pool' },
+  { id: 'patch', label: 'Análisis del parche 26.21' },
 ];
 
 export function mountToolsView(root: HTMLElement) {
-  let buildsMounted = false;
-  let visionMounted = false;
-  let draftMounted = false;
-
   const view = createView<State>({
     root,
     state: { tab: 'builds' },
@@ -30,17 +29,8 @@ export function mountToolsView(root: HTMLElement) {
       <div id="tools-builds-tab" class="${s.tab === 'builds' ? '' : 'hidden'}"></div>
       <div id="tools-vision-tab" class="${s.tab === 'vision' ? '' : 'hidden'}"></div>
       <div id="tools-draft-tab" class="${s.tab === 'draft' ? '' : 'hidden'}"></div>
-      <div id="tools-pool-tab" class="${s.tab === 'pool' ? '' : 'hidden'}">
-        <div class="card grid place-items-center gap-3 py-20 text-center text-ink-dim">
-          <div class="text-[16px] font-bold text-ink">Constructor de Champion Pool</div>
-          <p class="max-w-[460px] text-[12.5px]">Define tu grupo de 3-5 campeones por rol (Blind Pick, Counter Pick, Pocket Pick) para optimizar tus recomendaciones tanto en SoloQ como en Torneos.</p>
-          <div class="flex gap-2">
-            <button class="btn btn-primary" data-action="tab" data-id="draft">Probar en Simulador de Draft</button>
-            <button class="btn" data-action="tab" data-id="builds">Ver Preparador de Builds</button>
-            <button class="btn" data-action="tab" data-id="vision">Ver Mapa de Visión</button>
-          </div>
-        </div>
-      </div>
+      <div id="tools-pool-tab" class="${s.tab === 'pool' ? '' : 'hidden'}"></div>
+      <div id="tools-patch-tab" class="${s.tab === 'patch' ? '' : 'hidden'}"></div>
     `,
     actions: {
       tab: ({ data }) => {
@@ -52,18 +42,23 @@ export function mountToolsView(root: HTMLElement) {
       const buildsEl = root.querySelector<HTMLElement>('#tools-builds-tab');
       const visionEl = root.querySelector<HTMLElement>('#tools-vision-tab');
       const draftEl = root.querySelector<HTMLElement>('#tools-draft-tab');
+      const poolEl = root.querySelector<HTMLElement>('#tools-pool-tab');
+      const patchEl = root.querySelector<HTMLElement>('#tools-patch-tab');
 
-      if (buildsEl && !buildsMounted) {
-        buildsMounted = true;
+      if (buildsEl) {
         mountBuildPlanner(buildsEl);
       }
-      if (visionEl && !visionMounted && v.state.tab === 'vision') {
-        visionMounted = true;
+      if (visionEl && v.state.tab === 'vision') {
         mountVisionMap(visionEl);
       }
-      if (draftEl && !draftMounted && v.state.tab === 'draft') {
-        draftMounted = true;
+      if (draftEl && v.state.tab === 'draft') {
         mountDraftSimulator(draftEl);
+      }
+      if (poolEl && v.state.tab === 'pool') {
+        mountChampionPool(poolEl);
+      }
+      if (patchEl && v.state.tab === 'patch') {
+        mountPatchAnalysis(patchEl);
       }
     },
   });
