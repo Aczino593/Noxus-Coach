@@ -44,6 +44,8 @@ export const CHAMPIONS: Champion[] = [
   c('Ornn', 'Ornn', 'top', 'AD', 2.2, 2, 2, 4, 4, 'tf,prot', 'tank,engage'),
   c('Malphite', 'Malphite', 'top,support', 'AP', 1.5, 2, 2, 3, 5, 'tf,pick', 'tank,engage'),
   c('Jax', 'Jax', 'top', 'AD', 1, 1, 2, 5, 3, 'split', 'hypercarry'),
+  c('Sett', 'Sett', 'top,mid,support', 'AD', 1.5, 2, 4, 3, 4, 'tf,pick', 'tank,heal'),
+  c('Mordekaiser', 'Mordekaiser', 'top,mid', 'AP', 1.5, 1, 3, 4, 4, 'tf,split', 'tank,heal'),
   c('Fiora', 'Fiora', 'top', 'AD', 0, 1, 4, 4, 2, 'split'),
   c('Renekton', 'Renekton', 'top', 'AD', 1.5, 1, 5, 2, 3, 'pick', 'heal'),
   c('Gnar', 'Gnar', 'top', 'AD', 2, 2, 3, 3, 2, 'tf', 'engage'),
@@ -55,6 +57,10 @@ export const CHAMPIONS: Champion[] = [
   c('Garen', 'Garen', 'top', 'AD', 1.5, 1, 4, 3, 5, 'split,tf', 'tank,heal'),
   c('Jayce', 'Jayce', 'top,mid', 'AD', 1, 1, 5, 2, 2, 'poke', 'poke,burst'),
   c('Poppy', 'Poppy', 'top,jungle,support', 'AD', 1.5, 1, 3, 3, 4, 'prot,pick', 'tank'),
+  c('TahmKench', 'Tahm Kench', 'top,support', 'AP', 2, 2, 3, 4, 4, 'prot,pick', 'tank'),
+  c('ChoGath', "Cho'Gath", 'top,mid', 'AP', 2.5, 2, 3, 4, 5, 'tf,pick', 'tank'),
+  c('Irelia', 'Irelia', 'top,mid', 'AD', 1.5, 1, 4, 4, 2, 'tf,split', 'heal'),
+  c('Riven', 'Riven', 'top,mid', 'AD', 1.5, 1, 4, 3, 1, 'tf,split', 'burst'),
 
   // Jungla
   c('LeeSin', 'Lee Sin', 'jungle', 'AD', 1, 1, 5, 2, 2, 'pick', 'assassin'),
@@ -91,7 +97,14 @@ export const CHAMPIONS: Champion[] = [
   c('Ryze', 'Ryze', 'mid,top', 'AP', 1, 2, 2, 5, 2, 'tf,split', 'hypercarry'),
   c('Lissandra', 'Lissandra', 'mid', 'AP', 2.5, 2, 3, 3, 4, 'pick,tf', 'engage'),
   c('Cassiopeia', 'Cassiopeia', 'mid', 'AP', 2, 2, 2, 5, 3, 'tf', 'hypercarry,heal'),
-  c('Veigar', 'Veigar', 'mid,support', 'AP', 1.5, 0, 2, 5, 4, 'poke,pick', 'burst'),
+  c('Veigar', 'Veigar', 'mid,support,adc', 'AP', 1.5, 0, 2, 5, 4, 'poke,pick', 'burst'),
+  c('Brand', 'Brand', 'support,mid,jungle,adc', 'AP', 1.5, 1, 4, 4, 4, 'tf,poke', 'burst'),
+  c('Swain', 'Swain', 'support,mid,adc', 'AP', 2, 1, 3, 4, 4, 'tf,poke', 'heal'),
+  c('Ziggs', 'Ziggs', 'mid,adc', 'AP', 1, 2, 3, 4, 3, 'poke', 'poke'),
+  c('Seraphine', 'Seraphine', 'support,mid,adc', 'AP', 2.5, 2, 2, 4, 4, 'tf,prot', 'enchanter,poke'),
+  c('Karthus', 'Karthus', 'jungle,adc,mid', 'AP', 0, 2, 2, 5, 4, 'tf', 'burst'),
+  c('Vladimir', 'Vladimir', 'mid,top', 'AP', 0, 1, 2, 5, 3, 'tf,split', 'heal'),
+  c('Katarina', 'Katarina', 'mid', 'AP', 0, 1, 3, 4, 2, 'tf,pick', 'burst'),
 
   // ADC
   c('Jinx', 'Jinx', 'adc', 'AD', 0, 2, 2, 5, 4, 'tf,prot', 'hypercarry'),
@@ -103,7 +116,7 @@ export const CHAMPIONS: Champion[] = [
   c('Vayne', 'Vayne', 'adc,top', 'AD', 1, 1, 2, 5, 2, 'split,tf', 'hypercarry'),
   c('Xayah', 'Xayah', 'adc', 'AD', 1.25, 1, 3, 4, 3, 'tf,prot', 'hypercarry'),
   c('Varus', 'Varus', 'adc,mid', 'AD', 2, 2, 3, 3, 3, 'poke,tf,pick', 'poke'),
-  c('Tristana', 'Tristana', 'adc', 'AD', 1, 1, 3, 5, 4, 'tf', 'hypercarry'),
+  c('Tristana', 'Tristana', 'adc,mid', 'AD', 1, 1, 3, 5, 4, 'tf', 'hypercarry'),
   c('Lucian', 'Lucian', 'adc,mid', 'AD', 0, 1, 5, 3, 3, 'pick', 'burst'),
   c('Zeri', 'Zeri', 'adc', 'AD', 0, 2, 2, 5, 2, 'prot,tf', 'hypercarry'),
   c('MissFortune', 'Miss Fortune', 'adc', 'AD', 0, 2, 3, 4, 5, 'tf,poke', 'poke'),
@@ -112,6 +125,10 @@ export const CHAMPIONS: Champion[] = [
   c('Draven', 'Draven', 'adc', 'AD', 1, 1, 5, 3, 3, 'pick', 'burst'),
   c('Samira', 'Samira', 'adc', 'AD', 0, 1, 4, 4, 2, 'tf,pick', 'burst'),
   c('KogMaw', "Kog'Maw", 'adc', 'AD', 0, 2, 2, 5, 4, 'tf,prot', 'hypercarry'),
+  c('Sivir', 'Sivir', 'adc', 'AD', 0, 0, 3, 4, 4, 'tf,prot', 'hypercarry'),
+  c('Senna', 'Senna', 'support,adc', 'AD', 1.5, 1, 3, 5, 3, 'poke,prot', 'heal,poke'),
+  c('Twitch', 'Twitch', 'adc', 'AD', 0, 2, 2, 5, 3, 'tf,pick', 'hypercarry,assassin'),
+  c('Nilah', 'Nilah', 'adc', 'AD', 1.5, 1, 2, 5, 2, 'tf,split', 'hypercarry,heal'),
 
   // Support
   c('Thresh', 'Thresh', 'support', 'MIX', 1.5, 1, 3, 3, 2, 'pick,prot', 'engage'),

@@ -13,16 +13,20 @@ import { ROLE_LABEL, ROLES, type Role } from '../types';
 import { championPicker } from './ChampionPicker';
 import { runesTree } from './RunesTree';
 import { sleep } from '../lib/ui';
+import { importBuildToClient, importRunesToClient } from '../lib/lcuClient';
 
 interface State {
   mine: string;
   enemy: string | null;
   role: Role;
   picker: 'mine' | 'enemy' | null;
+  pickerRole: Role | null;
   query: string;
   loading: boolean;
   selectedSituational: number;
   presetId: PresetId;
+  importToast: { text: string; success: boolean } | null;
+  importing: boolean;
 }
 
 const gold = (n: number) => `${n.toLocaleString('es-AR')} g`;
@@ -53,12 +57,13 @@ function trigger(kind: 'mine' | 'enemy', s: State): string {
       open
         ? championPicker({
             query: s.query,
-            role: kind === 'enemy' ? s.role : null,
+            role: s.pickerRole,
             exclude: kind === 'enemy' ? [s.mine] : [],
             pickAction: `pick-${kind}`,
             closeAction: 'close',
             inputKey: `q-${kind}`,
             title: label,
+            roleAction: 'picker-filter-role',
           })
         : ''
     }
@@ -102,7 +107,6 @@ function controls(s: State): string {
 /* ─────────────── Columna Izquierda: Recommended Builds (Estilo Mobalytics) ─────────────── */
 function recommendedBuildsSidebar(presets: BuildPreset[], s: State): string {
   const ch = CHAMP_BY_ID[s.mine];
-  const enemyCh = s.enemy ? CHAMP_BY_ID[s.enemy] : null;
 
   return `
   <div class="space-y-4">
@@ -187,30 +191,91 @@ function recommendedBuildsSidebar(presets: BuildPreset[], s: State): string {
       </div>
     </div>
 
-    <!-- Matchup Specific (Estilo Mobalytics) -->
-    <div class="card p-4 space-y-2.5">
-      <div class="flex items-center justify-between border-b border-line pb-2">
-        <h4 class="text-[11.5px] font-black uppercase tracking-wider text-ink-dim">MATCHUP SPECIFIC</h4>
-        <span class="text-[10.5px] text-ink-mute">WR</span>
-      </div>
-      <div class="space-y-1.5 text-[11.5px]">
-        <div class="flex items-center justify-between p-1.5 rounded-lg bg-surface-2/40 border border-line/40">
-          <span class="font-medium text-ink">vs Syndra</span>
-          <span class="num font-bold text-win">52.6%</span>
+    <!-- Matchup Specific Dinámico y Reactivo (Estilo Mobalytics/OP.GG) -->
+    ${matchupSpecificCard(s)}
+  </div>`;
+}
+
+function matchupSpecificCard(s: State): string {
+  const enemyCh = s.enemy ? CHAMP_BY_ID[s.enemy] : null;
+  const currentMatch = s.enemy ? matchup(s.mine, s.enemy, s.role) : null;
+
+  // Lista de rivales comunes en la línea según el rol del usuario
+  const commonRivalsByRole: Record<Role, string[]> = {
+    adc: ['Jinx', 'Kaisa', 'Ezreal', 'Jhin', 'Ashe', 'Vayne', 'Aphelios', 'Varus'],
+    mid: ['Ahri', 'Syndra', 'Yasuo', 'Yone', 'Zed', 'Sylas', 'Viktor', 'Akali'],
+    top: ['Aatrox', 'Darius', 'Garen', 'Jax', 'Fiora', 'Sett', 'Camille', 'Ornn'],
+    jungle: ['LeeSin', 'Viego', 'JarvanIV', 'Nocturne', 'Sejuani', 'Vi', 'Amumu'],
+    support: ['Thresh', 'Nautilus', 'Blitzcrank', 'Leona', 'Lulu', 'Karma', 'Lux'],
+  };
+
+  const pool = (commonRivalsByRole[s.role] || ['Jinx', 'Ahri', 'Darius'])
+    .filter((id) => id !== s.mine && id !== s.enemy && CHAMP_BY_ID[id])
+    .slice(0, 3);
+
+  const commonEntries = pool.map((rivalId) => {
+    const rCh = CHAMP_BY_ID[rivalId];
+    const m = matchup(s.mine, rivalId, s.role);
+    const wrVal = m ? m.wr.toFixed(1) : '50.0';
+    const wrClass = Number(wrVal) >= 51.5 ? 'text-win' : Number(wrVal) <= 48.5 ? 'text-loss' : 'text-gold';
+    return { ch: rCh, wr: wrVal, wrClass, m };
+  });
+
+  return `
+  <div class="card p-4 space-y-2.5">
+    <div class="flex items-center justify-between border-b border-line pb-2">
+      <h4 class="text-[11.5px] font-black uppercase tracking-wider text-ink-dim">MATCHUP SPECIFIC</h4>
+      <span class="text-[10px] font-bold text-ink-mute">WR PROBABLE</span>
+    </div>
+
+    <!-- Rival Seleccionado Actual (Destacado y Reactivo) -->
+    ${
+      enemyCh && currentMatch
+        ? `
+      <div class="p-2.5 rounded-xl border border-crimson/60 bg-gradient-to-r from-crimson/15 to-surface-2/60 space-y-1.5 shadow-[0_0_12px_rgba(255,46,77,0.15)]">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            ${champIcon(enemyCh.id, 30, '!border-red-side')}
+            <div class="min-w-0">
+              <div class="text-[12px] font-bold text-ink truncate">vs ${esc(enemyCh.name)} <span class="text-[9px] font-extrabold text-crimson uppercase tracking-wide">Rival</span></div>
+              <div class="text-[9.5px] text-ink-mute truncate max-w-[130px]" title="${esc(currentMatch.keyThreat)}">${esc(currentMatch.keyThreat)}</div>
+            </div>
+          </div>
+          <div class="text-right flex-none">
+            <div class="num text-[13px] font-black ${currentMatch.tone === 'good' ? 'text-win' : currentMatch.tone === 'bad' ? 'text-loss' : 'text-gold'}">
+              ${currentMatch.wr.toFixed(1)}%
+            </div>
+            <span class="chip ${currentMatch.tone === 'good' ? 'chip-win' : currentMatch.tone === 'bad' ? 'chip-crimson' : 'chip-gold'} !py-0 !text-[8.5px]">
+              ${esc(currentMatch.label)}
+            </span>
+          </div>
         </div>
-        <div class="flex items-center justify-between p-1.5 rounded-lg bg-surface-2/40 border border-line/40">
-          <span class="font-medium text-ink">vs Sylas</span>
-          <span class="num font-bold text-gold">50.4%</span>
-        </div>
-        ${
-          enemyCh
-            ? `<div class="flex items-center justify-between p-1.5 rounded-lg border border-crimson/50 bg-crimson/10 font-bold">
-                 <span class="text-crimson">vs ${esc(enemyCh.name)} (Rival)</span>
-                 <span class="num text-gold">52.4%</span>
-               </div>`
-            : ''
-        }
-      </div>
+      </div>`
+        : `
+      <div class="p-2.5 rounded-lg border border-dashed border-line text-center text-[11px] text-ink-mute">
+        Elige un rival arriba para ver consejos y estadísticas específicas del matchup
+      </div>`
+    }
+
+    <!-- Otros Rivales Frecuentes del Carril -->
+    <div class="space-y-1 text-[11.5px] pt-1">
+      <div class="text-[10px] uppercase font-bold tracking-wider text-ink-mute/80 pb-0.5">Otros rivales frecuentes:</div>
+      ${commonEntries
+        .map(
+          (entry) => `
+        <button type="button"
+                class="w-full flex items-center justify-between p-1.5 rounded-lg bg-surface-2/40 border border-line/40 hover:bg-surface-2 hover:border-line-strong transition-all cursor-pointer text-left group"
+                data-action="pick-enemy"
+                data-id="${entry.ch.id}"
+                title="Hacer clic para analizar build vs ${esc(entry.ch.name)}">
+          <div class="flex items-center gap-2">
+            ${champIcon(entry.ch.id, 22, '!border-line')}
+            <span class="font-medium text-ink group-hover:text-gold transition-colors">vs ${esc(entry.ch.name)}</span>
+          </div>
+          <span class="num font-bold ${entry.wrClass}">${entry.wr}%</span>
+        </button>`,
+        )
+        .join('')}
     </div>
   </div>`;
 }
@@ -240,10 +305,22 @@ function centerColumn(b: BuildPreset, s: State): string {
           </div>
         </div>
       </div>
-      <button class="btn btn-sm btn-light font-bold" data-action="import-client" title="Importar runas y build directamente al cliente de League of Legends">
-        ${icon('download', 12)}
-        <span>IMPORT TO CLIENT</span>
-      </button>
+      <div class="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+        ${
+          s.importToast
+            ? `<span class="chip ${s.importToast.success ? 'chip-win' : 'chip-crimson'} text-[11px] font-bold animate-fade-in">
+                ${esc(s.importToast.text)}
+               </span>`
+            : ''
+        }
+        <button class="btn btn-sm ${s.importing ? 'opacity-60 cursor-wait' : 'btn-light'} font-bold shadow-md hover:scale-[1.02] transition-transform"
+                data-action="import-client"
+                ${s.importing ? 'disabled' : ''}
+                title="Equipa automáticamente las runas y exporta la build a la tienda del cliente de League of Legends">
+          ${s.importing ? icon('clock', 12) : icon('download', 12)}
+          <span>${s.importing ? 'IMPORTANDO A LOL...' : 'IMPORT TO CLIENT'}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Árbol Completo de Runas -->
@@ -392,16 +469,21 @@ function rightColumn(b: BuildPreset, s: State): string {
         ${sitList
           .map((sit, idx) => {
             const isSelected = idx === activeIdx;
+            const isCounter = sit.tag.startsWith('★');
             return `
             <button type="button"
-                    class="cursor-pointer rounded-lg p-0.5 transition-all ${
+                    class="cursor-pointer rounded-lg p-0.5 transition-all relative ${
                       isSelected
                         ? 'ring-2 ring-gold scale-105 shadow-[0_0_10px_rgba(240,180,41,0.5)]'
-                        : 'opacity-70 hover:opacity-100'
+                        : isCounter
+                          ? 'ring-1 ring-crimson/80 opacity-95 hover:opacity-100 hover:scale-105'
+                          : 'opacity-70 hover:opacity-100'
                     }"
                     data-action="select-situational"
-                    data-id="${idx}">
-              ${itemIcon(sit.item, 34, isSelected ? '!border-gold' : '!border-line')}
+                    data-id="${idx}"
+                    title="${esc(sit.tag)}">
+              ${isCounter ? '<span class="absolute -top-1 -right-1 flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-crimson opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-crimson"></span></span>' : ''}
+              ${itemIcon(sit.item, 34, isSelected ? '!border-gold' : isCounter ? '!border-crimson' : '!border-line')}
             </button>`;
           })
           .join('')}
@@ -411,9 +493,12 @@ function rightColumn(b: BuildPreset, s: State): string {
       ${
         activeSit
           ? `
-        <div class="rounded-xl border border-line-strong bg-canvas/90 p-3 text-[12px] space-y-1.5">
+        <div class="rounded-xl border ${activeSit.tag.startsWith('★') ? 'border-crimson/60 bg-gradient-to-r from-crimson/10 to-canvas/90' : 'border-line-strong bg-canvas/90'} p-3 text-[12px] space-y-1.5">
           <div class="flex items-center justify-between">
-            <span class="font-bold text-ink">${esc(item(activeSit.item).name)}</span>
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-ink">${esc(item(activeSit.item).name)}</span>
+              ${activeSit.tag.startsWith('★') ? `<span class="chip chip-crimson !py-0 !text-[9.5px] font-bold">${esc(activeSit.tag)}</span>` : `<span class="chip chip-gold !py-0 !text-[9.5px]">${esc(activeSit.tag)}</span>`}
+            </div>
             <span class="num text-gold font-bold">${gold(itemCost(activeSit.item))}</span>
           </div>
           <div class="text-[11px] text-ink-dim">
@@ -439,8 +524,18 @@ function matchupTipsCard(s: State): string {
   return `
   <section class="card p-4 space-y-2.5">
     <div class="flex items-center justify-between border-b border-line pb-2">
-      <h4 class="text-[11.5px] font-black uppercase tracking-wider text-crimson">5 CLAVES TÁCTICAS DEL ENFRENTAMIENTO</h4>
-      <span class="chip chip-crimson !py-0 text-[10px]">${esc(m.label)}</span>
+      <div>
+        <h4 class="text-[11.5px] font-black uppercase tracking-wider text-crimson">5 CLAVES TÁCTICAS DEL ENFRENTAMIENTO</h4>
+        <div class="text-[10px] text-ink-mute mt-0.5">Amenaza: <b class="text-ink">${esc(m.keyThreat)}</b></div>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="chip ${m.threatLevel === 'Crítica' || m.threatLevel === 'Alta' ? 'chip-crimson' : 'chip-gold'} !py-0 text-[9.5px]">
+          Amenaza ${m.threatLevel}
+        </span>
+        <span class="chip ${m.tone === 'good' ? 'chip-win' : m.tone === 'bad' ? 'chip-crimson' : 'chip-gold'} !py-0 text-[10px]">
+          ${esc(m.label)}
+        </span>
+      </div>
     </div>
     <ul class="space-y-1.5 text-[11.5px] leading-snug text-ink-dim">
       ${m.tips.map((t) => `<li class="flex items-start gap-1.5"><span class="text-crimson mt-0.5">•</span><span>${esc(t)}</span></li>`).join('')}
@@ -457,10 +552,13 @@ export function mountBuildPlanner(root: HTMLElement) {
       enemy: 'Yone',
       role: 'mid',
       picker: null,
+      pickerRole: null,
       query: '',
       loading: false,
       selectedSituational: 0,
       presetId: 'most-popular',
+      importToast: null,
+      importing: false,
     },
     render: (s) => {
       const presets = getChampionBuildPresets(s.mine, s.enemy, s.role);
@@ -491,9 +589,21 @@ export function mountBuildPlanner(root: HTMLElement) {
       </div>`;
     },
     actions: {
-      'open-mine': ({ state }) => ({ picker: state.picker === 'mine' ? null : 'mine', query: '' }),
-      'open-enemy': ({ state }) => ({ picker: state.picker === 'enemy' ? null : 'enemy', query: '' }),
+      'open-mine': ({ state }) => ({
+        picker: state.picker === 'mine' ? null : 'mine',
+        pickerRole: state.role,
+        query: '',
+      }),
+      'open-enemy': ({ state }) => ({
+        picker: state.picker === 'enemy' ? null : 'enemy',
+        pickerRole: null,
+        query: '',
+      }),
       close: () => ({ picker: null, query: '' }),
+      'picker-filter-role': ({ data }) => ({
+        pickerRole: data.id === 'all' ? null : (data.id as Role),
+      }),
+      'picker-clear-q': () => ({ query: '' }),
       'pick-mine': ({ data, view }) => {
         void change(view, { mine: data.id!, role: CHAMP_BY_ID[data.id!].roles[0] });
       },
@@ -515,8 +625,46 @@ export function mountBuildPlanner(root: HTMLElement) {
       'select-situational': ({ data }) => ({
         selectedSituational: Number(data.id ?? 0),
       }),
-      'import-client': () => {
-        window.alert('¡Configuración de runas y build exportada con éxito al cliente de League of Legends!');
+      'import-client': async ({ state, view: v }) => {
+        if (state.importing) return {};
+        v.set({ importing: true, importToast: null });
+        const ch = CHAMP_BY_ID[state.mine];
+        const presets = getChampionBuildPresets(state.mine, state.enemy, state.role);
+        const activePreset = presets.find((p) => p.id === state.presetId) || presets[0];
+
+        try {
+          // 1. Guardar la build en la tienda oficial de LoL
+          const buildRes = await importBuildToClient(ch.name, activePreset);
+          // 2. Equipar runas vía LCU API
+          const runeRes = await importRunesToClient(activePreset.runes, ch.name, activePreset.label);
+
+          let toastMsg = '';
+          let isSuccess = false;
+
+          if (runeRes.success && buildRes.success) {
+            toastMsg = '✓ ¡Runas equipadas y Build guardada en la Tienda!';
+            isSuccess = true;
+          } else if (buildRes.success && !runeRes.success) {
+            toastMsg = '✓ Build guardada en la Tienda · (Abre LoL para equipar runas)';
+            isSuccess = true;
+          } else if (runeRes.success) {
+            toastMsg = '✓ ¡Runas equipadas en el cliente de LoL!';
+            isSuccess = true;
+          } else {
+            toastMsg = runeRes.message || buildRes.message || 'Error al conectar con LoL';
+            isSuccess = false;
+          }
+
+          v.set({ importing: false, importToast: { text: toastMsg, success: isSuccess } });
+          setTimeout(() => {
+            if (v.state.importToast?.text === toastMsg) {
+              v.set({ importToast: null });
+            }
+          }, 6000);
+        } catch (err: any) {
+          v.set({ importing: false, importToast: { text: `Error: ${err?.message}`, success: false } });
+        }
+        return {};
       },
     },
     inputs: {

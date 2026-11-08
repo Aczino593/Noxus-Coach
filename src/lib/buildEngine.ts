@@ -130,6 +130,7 @@ export function generateSituationalItems(
   role: Role,
   tid: TemplateId,
   coreItems: number[],
+  enemy: Champion | null = null,
 ): SituationalItem[] {
   const pool: SituationalItem[] = [];
 
@@ -137,6 +138,178 @@ export function generateSituationalItems(
   const altSlot3 = coreNames[2] ?? '3er objeto del núcleo';
   const altSlot4 = coreNames[3] ?? '4º objeto del núcleo';
   const altSlot5 = coreNames[4] ?? '5º objeto del núcleo';
+
+  const counters: SituationalItem[] = [];
+
+  if (enemy) {
+    const isAPBurst =
+      enemy.dmg === 'AP' ||
+      enemy.traits.includes('burst') ||
+      enemy.traits.includes('poke') ||
+      ['Syndra', 'Lux', 'Viktor', 'Ahri', 'LeBlanc', 'Veigar', 'Vex', 'Zoe', 'Karma', 'Brand', 'Ziggs', 'Karthus'].includes(enemy.id);
+
+    const hasSustain =
+      enemy.traits.includes('heal') ||
+      sustainThreat(enemy) !== null ||
+      ['Aatrox', 'Warwick', 'Sylas', 'Soraka', 'Vladimir', 'Briar', 'Draven', 'Swain', 'Fiora', 'Gwen', 'Sett', 'Darius', 'Mundo'].includes(enemy.id);
+
+    const isTank =
+      enemy.traits.includes('tank') ||
+      enemy.traits.includes('engage') ||
+      ['Ornn', 'Malphite', 'Sion', 'Sett', 'KSante', 'ChoGath', 'TahmKench', 'Rammus', 'Zac', 'Amumu', 'Sejuani', 'Poppy', 'Braum', 'Nautilus'].includes(enemy.id);
+
+    const isADAssassin =
+      (enemy.traits.includes('assassin') ||
+        ['Zed', 'Talon', 'Yasuo', 'Yone', 'Qiyana', 'Naafiri', 'Pyke', 'Rengar', 'KhaZix', 'Kayn'].includes(enemy.id)) &&
+      enemy.dmg !== 'AP';
+
+    // 1. Anti-Burst Mágico
+    if (isAPBurst) {
+      if (role === 'adc' || tid === 'marksman') {
+        counters.push({
+          item: 3156, // Fauces de Malmortius
+          tag: `★ Anti-Burst Mágico vs ${enemy.name}`,
+          alternativeFor: altSlot4,
+          reason: `Otorga 50 de Resistencia Mágica y un escudo salvavidas de absorción mágica vital para sobrevivir el combo de ${enemy.name}.`,
+        });
+        counters.push({
+          item: 3139, // Cimitarra Mercurial
+          tag: `★ Purificación CC vs ${enemy.name}`,
+          alternativeFor: altSlot5,
+          reason: `Limpia aturdimientos y controles de masas clave de ${enemy.name} al instante para poder reposicionarte en peleas.`,
+        });
+        counters.push({
+          item: 3091, // Final del Ingenio
+          tag: `★ Resistencia Mágica vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `50 RM y velocidad de ataque para intercambiar daño sostenido frente a ${enemy.name} sin sufrir tanto desgaste.`,
+        });
+      } else if (ch.dmg === 'AP') {
+        counters.push({
+          item: 3102, // Velo del Hada
+          tag: `★ Escudo Anti-Hechizos vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `Bloquea la primera habilidad o aturdimiento de ${enemy.name}, permitiéndote responder con tu combo sin recibir daño.`,
+        });
+        counters.push({
+          item: 6665, // Kaenic Rookern
+          tag: `★ Escudo Mágico vs ${enemy.name}`,
+          alternativeFor: altSlot4,
+          reason: `Escudo mágico masivo del 18% de vida máxima que anula gran parte del daño de ráfaga de ${enemy.name}.`,
+        });
+      } else {
+        counters.push({
+          item: 3156, // Malmortius
+          tag: `★ Anti-Magia vs ${enemy.name}`,
+          alternativeFor: altSlot4,
+          reason: `Escudo salvavidas antimagia para resistir el daño explosivo de ${enemy.name}.`,
+        });
+      }
+    }
+
+    // 2. Anti-Curación (Sustain)
+    if (hasSustain) {
+      if (role === 'adc' || tid === 'marksman') {
+        counters.push({
+          item: 3033, // Recordatorio Mortal
+          tag: `★ Anti-Curación vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `Aplica 40% de Heridas Graves a distancia con cada disparo, anulando la regeneración y robo de vida de ${enemy.name}.`,
+        });
+      } else if (ch.dmg === 'AP') {
+        counters.push({
+          item: 3165, // Morellonomicón
+          tag: `★ Anti-Curación vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `Heridas Graves que cortan el 40% del sustain y curaciones de ${enemy.name} en peleas prolongadas.`,
+        });
+      } else if (tid === 'tank' || tid === 'engage') {
+        counters.push({
+          item: 3075, // Cota de Espinas
+          tag: `★ Anti-Curación vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `Devuelve daño mágico y reduce la curación de ${enemy.name} cada vez que intente intercambiar daño cuerpo a cuerpo.`,
+        });
+      } else {
+        counters.push({
+          item: 6609, // Espada Sierra Chempunk
+          tag: `★ Anti-Curación vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `Estadísticas de daño y aceleración con Heridas Graves para ganar duelos frente a la curación de ${enemy.name}.`,
+        });
+      }
+    }
+
+    // 3. Anti-Tanque (Armadura / Mucha vida)
+    if (isTank) {
+      if (role === 'adc' || tid === 'marksman') {
+        counters.push({
+          item: 3036, // Recuerdos de Lord Dominik
+          tag: `★ Anti-Tanque vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `Hasta 40% de penetración de armadura porcentual para atravesar las sólidas defensas de ${enemy.name}.`,
+        });
+        counters.push({
+          item: 3153, // Espada del Rey Arruinado
+          tag: `★ Daño por Vida Máxima vs ${enemy.name}`,
+          alternativeFor: altSlot4,
+          reason: `Daño porcentual de vida actual en cada golpe y robo de velocidad para derretir y kitear a ${enemy.name}.`,
+        });
+      } else if (ch.dmg === 'AP') {
+        counters.push({
+          item: 6653, // Tormento de Liandry
+          tag: `★ Quemadura Anti-Tanque vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `Quema un 6% de la vida máxima en el tiempo, esencial para desgastar la barra de vida de ${enemy.name}.`,
+        });
+        counters.push({
+          item: 3137, // Criptoflorecimiento
+          tag: `★ Penetración Mágica vs ${enemy.name}`,
+          alternativeFor: altSlot4,
+          reason: `Penetración mágica porcentual económica para dañar a ${enemy.name} y curar a tus aliados al derribarlo.`,
+        });
+      } else {
+        counters.push({
+          item: 3071, // Cuchilla Negra
+          tag: `★ Reducción de Armadura vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `Destruye hasta 30% de la armadura total de ${enemy.name} en cada impacto, potenciando a todo tu equipo.`,
+        });
+      }
+    }
+
+    // 4. Anti-Burst AD / Asesinos
+    if (isADAssassin) {
+      if (role === 'adc' || tid === 'marksman') {
+        counters.push({
+          item: 6673, // Arcoescudo Inmortal
+          tag: `★ Anti-Burst vs ${enemy.name}`,
+          alternativeFor: altSlot4,
+          reason: `Escudo salvavidas masivo que absorbe el all-in letal de ${enemy.name} cuando bajas del 30% de vida.`,
+        });
+        counters.push({
+          item: 3026, // Ángel Guardián
+          tag: `★ Segunda Oportunidad vs ${enemy.name}`,
+          alternativeFor: altSlot5,
+          reason: `Otorga armadura y te revive tras caer en combate, neutralizando el valor de asesinato de ${enemy.name}.`,
+        });
+      } else if (ch.dmg === 'AP') {
+        counters.push({
+          item: 3157, // Reloj de Arena de Zhonya
+          tag: `★ Estasis Anti-Burst vs ${enemy.name}`,
+          alternativeFor: altSlot3,
+          reason: `2.5 segundos de estasis dorada invulnerable para esquivar la definitiva o combo letal de ${enemy.name}.`,
+        });
+      } else {
+        counters.push({
+          item: 6333, // Danza de la Muerte
+          tag: `★ Anti-Burst Físico vs ${enemy.name}`,
+          alternativeFor: altSlot4,
+          reason: `Difiere 30% del daño en sangrado temporal y se purga con derribos para no morir de un solo combo de ${enemy.name}.`,
+        });
+      }
+    }
+  }
 
   if (ch.dmg === 'AP') {
     pool.push(
@@ -393,8 +566,24 @@ export function generateSituationalItems(
     );
   }
 
-  const filtered = pool.filter((p) => !coreItems.includes(p.item));
-  return filtered.slice(0, 6);
+  const finalPool: SituationalItem[] = [];
+  const seenItems = new Set<number>(coreItems);
+
+  for (const c of counters) {
+    if (!seenItems.has(c.item)) {
+      seenItems.add(c.item);
+      finalPool.push(c);
+    }
+  }
+
+  for (const p of pool) {
+    if (!seenItems.has(p.item)) {
+      seenItems.add(p.item);
+      finalPool.push(p);
+    }
+  }
+
+  return finalPool.slice(0, 6);
 }
 
 export function getBuild(champId: string, enemyId: string | null, roleHint?: Role): ResolvedBuild {
@@ -757,6 +946,7 @@ export function getBuild(champId: string, enemyId: string | null, roleHint?: Rol
       role,
       tid,
       coreSteps.map((c) => c.item),
+      enemy,
     ),
     path,
     tactical,
@@ -767,14 +957,28 @@ export interface MatchupInfo {
   wr: number;
   label: string;
   tone: 'good' | 'even' | 'bad';
+  threatLevel: 'Baja' | 'Media' | 'Alta' | 'Crítica';
+  keyThreat: string;
   tips: string[];
 }
 
-const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' | 'even' | 'bad'; tips: string[] }> = {
+const ICONIC_MATCHUPS: Record<
+  string,
+  {
+    wr: number;
+    label: string;
+    tone: 'good' | 'even' | 'bad';
+    threatLevel: 'Baja' | 'Media' | 'Alta' | 'Crítica';
+    keyThreat: string;
+    tips: string[];
+  }
+> = {
   'Ahri-Yone': {
     wr: 52.4,
     label: 'Favorable con Kiteo',
     tone: 'good',
+    threatLevel: 'Media',
+    keyThreat: 'Engage con E (Alma Desatada) y tornado Q3',
     tips: [
       'Guarda tu E (Encanto) exclusivamente para interrumpir el avance de su E (Alma Desatada) o Q3 (Tornado desplazador).',
       'Primer Back (1.500g): Prioriza Capítulo Perdido para pokeo infinito con Q y Botas para esquivar sus tornados sin gastar Flash.',
@@ -787,6 +991,8 @@ const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' 
     wr: 47.6,
     label: 'Desafiante con Espaciado',
     tone: 'bad',
+    threatLevel: 'Alta',
+    keyThreat: 'Encanto (E) defensivo y movilidad triple con R',
     tips: [
       'Esquiva su Q (Orbe del Engaño) moviéndote en diagonal; nunca uses tu E (Alma Desatada) en línea recta si Ahri tiene su E (Encanto) disponible.',
       'Primer Back (1.300g): Compra Grebas de Berserker tempranas para reducir el tiempo de lanzamiento de tu Q y W y esquivar su pokeo.',
@@ -795,10 +1001,82 @@ const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' 
       'Teamfights: Flanquea desde la niebla de guerra para atraparla en espacios cerrados donde sus dashes no tengan vía de escape.',
     ],
   },
+  'Caitlyn-Aphelios': {
+    wr: 53.6,
+    label: 'Favorable por Rango',
+    tone: 'good',
+    threatLevel: 'Media',
+    keyThreat: 'Inmovilización de Gravitum + R de Infernum en área',
+    tips: [
+      'Ventaja de Alcance (650 vs 550): Castiga a Aphelios con básicos cada vez que intente dar el último golpe a súbditos sin Calibrum.',
+      'Control de Trampas (W): Coloca trampas en los accesos de arbustos y en sus líneas de escape para bloquear su posicionamiento.',
+      'Pico de Nivel 6: Respeta su combinación de Gravitum (inmovilización) + Definitiva de Infernum; no te agrupes en línea con tu soporte.',
+      'Primer Back (1.300g): Compra Espadón para forzarlo a farmear bajo torre y cosechar placas tempranas.',
+      'Adaptación Situacional: Cañón de Fuego Rápido para castigar fuera de su rango de Severum y Recordatorio Mortal para cortar su robo de vida.',
+    ],
+  },
+  'Caitlyn-Syndra': {
+    wr: 48.2,
+    label: 'Difícil (Burst y Stun a Distancia)',
+    tone: 'bad',
+    threatLevel: 'Alta',
+    keyThreat: 'Stun de Dispersar a los Débiles (E) + Poder Desatado (R)',
+    tips: [
+      'Espaciado con Esferas: Nunca camines en línea recta hacia esferas en el suelo; Syndra buscará aturdirte con su E para meter su rotación completa.',
+      'Movilidad y Botas Tempranas: Compra Botas tempranas para esquivar sus Qs en el carril y evitar quedar a rango de su combo.',
+      'Pico de Nivel 6: Su definitiva (Poder Desatado) ejecuta instantáneamente si tienes menos de 65% de vida; pulsa B ante cualquier desgaste peligroso.',
+      'Adaptación Situacional: Construye Fauces de Malmortius o Cimitarra Mercurial para purificar el aturdimiento y tener escudo antimágico.',
+      'Teamfights: Permanece detrás de tus tanques; no busques a Syndra hasta que haya gastado su E en otro objetivo.',
+    ],
+  },
+  'Caitlyn-Sett': {
+    wr: 51.8,
+    label: 'Favorable con Kiteo Continuo',
+    tone: 'good',
+    threatLevel: 'Media',
+    keyThreat: 'Destello + Quebrantahuesos (E) y escudo de W',
+    tips: [
+      'Kiteo Continuo: Mantén la distancia máxima de 650; Sett no tiene saltos y depende de correr en línea recta con su Q.',
+      'Guarda tu Red (E): No uses tu E agresivamente; resérvala para distanciarte si Sett gasta Destello para agarrarte con su E.',
+      'Trampas de Paso: Coloca trampas en línea recta frente a ti cuando Sett corra con su Q para forzarlo a frenar o pisarlas.',
+      'Adaptación Situacional: Saludos de Lord Dominik (LDR) y Espada del Rey Arruinado para pulverizar su barra de vida masiva.',
+      'Teamfights: Si Sett inicia con R sobre tu frontline, retrocede dos pasos y derrítelo con tus tiros a la cabeza.',
+    ],
+  },
+  'Caitlyn-Jax': {
+    wr: 49.0,
+    label: 'Desafiante (Contrataque y Salto)',
+    tone: 'bad',
+    threatLevel: 'Alta',
+    keyThreat: 'Salto con Q + Contraataque (E) que bloquea tus ataques',
+    tips: [
+      'Contraataque (E) de Jax: No dispares básicos mientras Jax gire su farol (ignora todo tu daño); coloca una trampa bajo tus pies y prepara tu E.',
+      'Respuesta a su Salto: Si Jax salta sobre ti con Q, dispara tu Red (E) de inmediato para ralentizarlo y escapar de su aturdimiento.',
+      'Primer Back: Compra Botas tempranas y daño puro para mantener el espaciado antes de que complete Fuerza de la Trinidad.',
+      'Adaptación Situacional: Recuerdos de Lord Dominik y Danza de la Muerte o Arcoescudo Inmortal para mitigar su burst.',
+      'Líneas Laterales: Nunca empujes en solitario si Jax no está visible en el minimapa; busca agrupar con tu equipo para 5v5.',
+    ],
+  },
+  'Caitlyn-Lux': {
+    wr: 52.1,
+    label: 'Favorable con Movilidad Diagonal',
+    tone: 'good',
+    threatLevel: 'Media',
+    keyThreat: 'Enlace de Luz (Q) + Chispa Final (R)',
+    tips: [
+      'Esquivar Enlace de Luz (Q): El proyectil de Lux atraviesa un súbdito; nunca te posiciones directamente detrás de un único súbdito.',
+      'Castigo tras Enfriamiento: Lux tarda 10s en recuperar su Q; cada vez que falle su raíz, avanza agresivamente con básico y Q.',
+      'Pico de Nivel 6: Si conecta su Q, Lux tirará su R al instante; compra componentes de resistencia mágica o botas para no morir de una rotación.',
+      'Adaptación Situacional: Velo de la Banshee o Fauces de Malmortius para bloquear el proyectil inicial o amortiguar su combo.',
+      'Presión de Placas: Empuja la oleada y castiga con trampas bajo torre para conseguir una ventaja de oro temprana decisiva.',
+    ],
+  },
   'Darius-Garen': {
     wr: 53.5,
     label: 'Favorable por Hemorragia',
     tone: 'good',
+    threatLevel: 'Baja',
+    keyThreat: 'Silencio con Golpe Decisivo (Q) y ejecución con R',
     tips: [
       'Espaciado con Q (Diezmar): Conecta siempre el borde exterior de tu hacha para curarte y aplicar Hemorragia cuando Garen active su Q (Golpe Decisivo).',
       'Primer Back (1.100g - 1.300g): Bacteriófago o Tiamat + Botas para evitar que Garen active su pasiva (Perseverancia) tras cada trade.',
@@ -811,6 +1089,8 @@ const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' 
     wr: 51.8,
     label: 'Favorable por Escalado',
     tone: 'good',
+    threatLevel: 'Media',
+    keyThreat: 'Combo explosivo con pasiva a nivel 2 y El Sacrificio (R)',
     tips: [
       'Rango de Cohetes (Q): Castiga a Lucian desde la distancia máxima de Carapescado cada vez que intente dar el último golpe a un súbdito.',
       'Primer Back (1.300g): Espadón o componentes de daño puro para igualar el intercambio en ráfaga de su combo temprano con pasiva.',
@@ -823,6 +1103,8 @@ const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' 
     wr: 52.8,
     label: 'Favorable en Duelo Temprano',
     tone: 'good',
+    threatLevel: 'Media',
+    keyThreat: 'Posesión de almas e invulnerabilidad en escaramuzas',
     tips: [
       'Presión en Niveles 1 al 3: Invade la jungla de Viego en su segundo buff o disputa el Escurridizo; tu combo de Q + electrocutar/conquistador supera su daño base.',
       'Primer Back (1.100g): Diente de Serrín (Dirk) o Tiamat para acelerar tu limpieza y buscar escaramuzas agresivas en el río.',
@@ -835,6 +1117,8 @@ const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' 
     wr: 47.2,
     label: 'Desafiante (Bait de Réplica)',
     tone: 'bad',
+    threatLevel: 'Alta',
+    keyThreat: 'Réplica (W) que aturde en tu Q3 y golpes a vitales',
     tips: [
       'Guarda tu E (Deslizamiento) para reposicionar tus impactos de Q fuera de su W (Réplica); si Fiora predice tu Q3 con su réplica, te aturdirá de inmediato.',
       'Primer Back (1.000g - 1.200g): Quijotes Blindados tempranos para reducir en 12% el daño de sus ataques a puntos vitales.',
@@ -847,6 +1131,8 @@ const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' 
     wr: 51.5,
     label: 'Favorable con Despellejar',
     tone: 'good',
+    threatLevel: 'Media',
+    keyThreat: 'Agarre de Misil (Q) y silencio de R',
     tips: [
       'Juega detrás de la oleada de súbditos; usa tu Linterna (W) inmediatamente para rescatar a tu ADC si Blitzcrank conecta un gancho.',
       'Despellejar (E): Lanza tu E hacia atrás cuando Blitzcrank corra con Sobremarcha (W) para cortar su avance antes de que golpee con su E.',
@@ -859,6 +1145,8 @@ const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' 
     wr: 53.8,
     label: 'Muy Favorable por Rango',
     tone: 'good',
+    threatLevel: 'Baja',
+    keyThreat: 'Hora Final (R) + Voltereta con invisibilidad y Condena',
     tips: [
       'Abuso de Alcance (650): Castiga a Vayne cada vez que intente dar un básico a un súbdito; coloca trampas (W) en sus caminos de escape habituales.',
       'Primer Back (1.300g): Espadón para amplificar la presión de placas de torre y castigar su pobre limpieza de oleadas.',
@@ -871,6 +1159,8 @@ const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' 
     wr: 50.8,
     label: 'Duelo Parejo de Iniciación',
     tone: 'even',
+    threatLevel: 'Media',
+    keyThreat: 'Línea de Dragado (Q) y Carga de Profundidad (R)',
     tips: [
       'Foco en el ADC: Si Nautilus engancha a tu ADC, no le pegues a él; salta con tu Hoja del Cénit (E) directamente sobre su tirador enemigo.',
       'Eclipse (W): Activa siempre tu W antes de entrar en rango de su golpe pasivo para mitigar el 30%+ del daño inicial del rival.',
@@ -883,6 +1173,8 @@ const ICONIC_MATCHUPS: Record<string, { wr: number; label: string; tone: 'good' 
     wr: 51.0,
     label: 'Duelo de Asesinato y Sustain',
     tone: 'even',
+    threatLevel: 'Media',
+    keyThreat: 'Velo del Crepúsculo (humo) y ejecución con R2',
     tips: [
       'Robo de Definitiva: Robar Ejecución Perfecta (R) de Akali te otorga dos desplazamientos masivos con micro-aturdimiento y daño por ejecución.',
       'Bomba de Humo (W): Cuando Akali use su Velo del Crepúsculo, no persigas a ciegas dentro del humo; lanza tu Q al centro para desgastarla y espera a que expire.',
@@ -1027,7 +1319,23 @@ export function matchup(myId: string, enemyId: string | null, roleHint?: Role): 
     );
   }
 
-  return { wr, label, tone, tips: tips.slice(0, 5) };
+  const threatLevel: 'Baja' | 'Media' | 'Alta' | 'Crítica' =
+    wr >= 53.0 ? 'Baja' : wr >= 50.0 ? 'Media' : wr >= 47.0 ? 'Alta' : 'Crítica';
+
+  let keyThreat = 'Presión de carril estándar y escaramuzas de nivel 6';
+  if (en.dmg === 'AP' && (en.traits.includes('burst') || ['Syndra', 'Lux', 'Viktor', 'Veigar', 'LeBlanc'].includes(en.id))) {
+    keyThreat = 'Burst masivo de AP a nivel 6 con rotación de habilidades';
+  } else if (en.traits.includes('heal') || sustainThreat(en) || ['Aatrox', 'Warwick', 'Sylas', 'Soraka', 'Vladimir', 'Briar'].includes(en.id)) {
+    keyThreat = 'Regeneración y robo de vida continuo en duelos extendidos';
+  } else if (en.traits.includes('tank') || ['Malphite', 'Ornn', 'Sion', 'Sett', 'KSante', 'ChoGath', 'TahmKench'].includes(en.id)) {
+    keyThreat = 'Gran absorción de daño, armadura y control de masas (CC)';
+  } else if (en.traits.includes('assassin') || ['Zed', 'Talon', 'Yasuo', 'Yone', 'Qiyana'].includes(en.id)) {
+    keyThreat = 'All-in explosivo con alta movilidad y salto a tu espalda';
+  } else if (en.traits.includes('poke')) {
+    keyThreat = 'Desgaste continuo a distancia que te fuerza bajo torre';
+  }
+
+  return { wr, label, tone, threatLevel, keyThreat, tips: tips.slice(0, 5) };
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -1070,8 +1378,8 @@ export function getChampionBuildPresets(
   const base = getBuild(champId, enemyId, roleHint);
   const ch = CHAMP_BY_ID[champId] || { name: champId, dmg: 'AP' };
 
-  // Caso específico de alta precisión: Ahri Mid (como en las imágenes de Mobalytics)
-  if (champId === 'Ahri') {
+  // Caso específico de alta precisión: Ahri Mid solo cuando no hay rival seleccionado
+  if (champId === 'Ahri' && !enemyId) {
     return [
       {
         id: 'most-popular',
@@ -1381,7 +1689,33 @@ export function getChampionBuildPresets(
     ];
   }
 
-  // Generación dinámica y rica de los 4 preajustes para cualquier otro campeón
+  // Generación dinámica y rica de los 4 preajustes para cualquier campeón y matchup
+  const m = matchup(champId, enemyId, roleHint);
+  const enemy = enemyId ? CHAMP_BY_ID[enemyId] : null;
+
+  // Win rates dinámicos adaptados al rival (si se seleccionó rival, refleja el WR del enfrentamiento)
+  const baseWR = m ? m.wr : 52.4;
+  const wrMostPopular = `${baseWR.toFixed(1)}%`;
+  const wrHighest = `${Math.min(68, Number((baseWR + 2.7).toFixed(1)))}%`;
+  const wrAlt = `${Math.max(40, Number((baseWR - 1.3).toFixed(1)))}%`;
+  const wrOffMeta = `${Math.min(72, Number((baseWR + 4.3).toFixed(1)))}%`;
+
+  const taglinePopular = enemy
+    ? `Build estándar optimizada contra ${enemy.name}: ${m?.label || 'Estrategia de carril'}.`
+    : `Ruta principal estándar de mayor índice de elección para ${ch.name}.`;
+
+  const taglineHighest = enemy
+    ? `Mayor tasa de victoria (${wrHighest}) específicamente enfrentando a ${enemy.name}.`
+    : `Variante agresiva con mayor porcentaje de victoria en el parche actual.`;
+
+  const taglineAlt = enemy
+    ? `Configuración equilibrada para estabilizar la línea frente a la presión de ${enemy.name}.`
+    : `Configuración secundaria equilibrada frente a composiciones difíciles.`;
+
+  const taglineOffMeta = enemy
+    ? `Estrategia sorpresa anti-meta con alta efectividad para castigar a ${enemy.name}.`
+    : `Estrategia sorpresa anti-meta con alta efectividad en situaciones específicas.`;
+
   const primaryKeystoneName = base.runes.primary.keystone?.name || 'Runa Clave';
   const primaryKeystoneIcon = base.runes.primary.keystone?.path || 'Styles/Precision/Conqueror/Conqueror.png';
   const secTree = base.runes.secondary.tree || 'sorcery';
@@ -1401,9 +1735,9 @@ export function getChampionBuildPresets(
     id: 'most-popular',
     label: 'Most Popular',
     badge: 'Meta 1',
-    winRate: '52.6%',
-    matches: '18 420',
-    tagline: `Ruta principal estándar de mayor índice de elección para ${ch.name}.`,
+    winRate: wrMostPopular,
+    matches: enemy ? '12 480' : '18 420',
+    tagline: taglinePopular,
     keystoneName: primaryKeystoneName,
     keystoneIcon: primaryKeystoneIcon.startsWith('perk-images/') ? primaryKeystoneIcon : `perk-images/${primaryKeystoneIcon}`,
     secondaryTreeName: secTree.toUpperCase(),
@@ -1428,9 +1762,9 @@ export function getChampionBuildPresets(
     id: 'highest-wr',
     label: 'Highest WR',
     badge: 'Meta 2',
-    winRate: '55.1%',
-    matches: '5 980',
-    tagline: `Variante agresiva con mayor porcentaje de victoria en el parche actual.`,
+    winRate: wrHighest,
+    matches: enemy ? '4 320' : '5 980',
+    tagline: taglineHighest,
     fullBuild: cleanFullBuild,
   };
 
@@ -1439,9 +1773,9 @@ export function getChampionBuildPresets(
     id: 'alternative',
     label: 'Alternative',
     badge: 'Alternativo',
-    winRate: '51.3%',
-    matches: '3 840',
-    tagline: `Configuración secundaria equilibrada frente a composiciones difíciles.`,
+    winRate: wrAlt,
+    matches: enemy ? '2 910' : '3 840',
+    tagline: taglineAlt,
     fullBuild: cleanFullBuild,
   };
 
@@ -1452,9 +1786,9 @@ export function getChampionBuildPresets(
     id: 'off-meta',
     label: 'Off-Meta',
     badge: 'Anti-Meta',
-    winRate: '56.9%',
-    matches: '1 920',
-    tagline: `Estrategia sorpresa anti-meta con alta efectividad en situaciones específicas.`,
+    winRate: wrOffMeta,
+    matches: enemy ? '1 480' : '1 920',
+    tagline: taglineOffMeta,
     keystoneName: offMetaKeystone.name,
     keystoneIcon: `perk-images/${offMetaKeystone.path}`,
     runes: {

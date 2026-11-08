@@ -138,6 +138,12 @@
     width: 46px; height: 56px;
     color: var(--color-ink-dim);
     transition: background-color .15s, color .15s;
+    -webkit-app-region: no-drag !important;
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    position: relative;
+    z-index: 50;
+    user-select: none;
   }
   .win-btn:hover { background: rgb(255 255 255 / 0.07); color: #fff; }
   .win-btn-close:hover { background: var(--color-loss); color: #fff; }

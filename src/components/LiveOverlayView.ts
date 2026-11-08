@@ -8,6 +8,7 @@ import { VISION_SPOTS, type VisionSpot } from '../data/visionSpots';
 import { ROLES, type Role } from '../types';
 import { getChampionBuildPresets, type BuildPreset } from '../lib/buildEngine';
 import { isTauri, setOverlayAlwaysOnTop } from '../lib/tauri';
+import { fetchHudSettings, importBuildToClient, importRunesToClient } from '../lib/lcuClient';
 
 /* ─────────────────────────────────────────────────────────────
  * TIPOS Y ESTADO DEL OVERLAY IN-GAME CONECTADO A LOL (127.0.0.1:2999)
@@ -53,6 +54,11 @@ interface State {
   /** Pequeña pestaña emergente de visión que dura 10 segundos y se cierra sola */
   wardToast: WardToastData | null;
   lastTriggeredWardPhase: string;
+  detectedGlobalScale: number;
+  detectedMinimapScale: number;
+  detectedFlipMiniMap: boolean;
+  hudScaleManualDelta: number;
+  importToast: string | null;
 }
 
 const CORNER_CLASSES: Record<OverlayCorner, string> = {
@@ -160,6 +166,11 @@ export function mountLiveOverlayView(root: HTMLElement, onOpenChange?: (open: bo
       ],
       wardToast: null,
       lastTriggeredWardPhase: '',
+      detectedGlobalScale: 1.0,
+      detectedMinimapScale: 1.0,
+      detectedFlipMiniMap: false,
+      hudScaleManualDelta: 0,
+      importToast: null,
     },
     render: (s) => {
       if (!s.open) return '';
@@ -183,7 +194,7 @@ export function mountLiveOverlayView(root: HTMLElement, onOpenChange?: (open: bo
           <button class="text-ink-mute hover:text-ink text-[12px] px-1" data-action="close-overlay" title="Cerrar Overlay (Alt+O)">✕</button>
         </aside>
         ${renderBottomAbilityHudBar(s, activePreset)}
-        ${s.wardToast ? renderTemporaryWardToast(s.wardToast) : ''}`;
+        ${s.wardToast ? renderTemporaryWardToast(s.wardToast, s.detectedFlipMiniMap) : ''}`;
       }
 
       return `
@@ -248,7 +259,7 @@ export function mountLiveOverlayView(root: HTMLElement, onOpenChange?: (open: bo
       ${renderBottomAbilityHudBar(s, activePreset)}
 
       <!-- 3. PEQUEÑA PESTAÑA TEMPORAL (10s) QUE INDICA DÓNDE WARDEAR Y DESAPARECE SOLA -->
-      ${s.wardToast ? renderTemporaryWardToast(s.wardToast) : ''}`;
+      ${s.wardToast ? renderTemporaryWardToast(s.wardToast, s.detectedFlipMiniMap) : ''}`;
     },
     actions: {
       'set-corner': ({ data }) => ({ corner: data.id as OverlayCorner }),
@@ -292,6 +303,35 @@ export function mountLiveOverlayView(root: HTMLElement, onOpenChange?: (open: bo
         };
       },
       'dismiss-ward-toast': () => ({ wardToast: null }),
+      'hud-scale-down': ({ state }) => ({
+        hudScaleManualDelta: Math.max(-0.6, state.hudScaleManualDelta - 0.05),
+      }),
+      'hud-scale-up': ({ state }) => ({
+        hudScaleManualDelta: Math.min(0.6, state.hudScaleManualDelta + 0.05),
+      }),
+      'quick-import-lol': async ({ state, view: v }) => {
+        const presets = getChampionBuildPresets(state.myChampId, state.rivalChampId, state.role);
+        const activePreset = presets[state.presetIdx] || presets[0];
+
+        v.set({ importToast: 'Importando...' });
+        try {
+          const bRes = await importBuildToClient(state.myChampId, activePreset);
+          const rRes = await importRunesToClient(activePreset.runes, state.myChampId, activePreset.label);
+          const msg =
+            rRes.success && bRes.success
+              ? '✓ Runas y Build en LoL'
+              : bRes.success
+                ? '✓ Build en Tienda LoL'
+                : rRes.message || bRes.message;
+          v.set({ importToast: msg });
+          setTimeout(() => {
+            if (v.state.importToast === msg) v.set({ importToast: null });
+          }, 5000);
+        } catch {
+          v.set({ importToast: 'Error al importar' });
+        }
+        return {};
+      },
     },
     changes: {
       'my-champ': ({ value, view: v }) => {
@@ -536,10 +576,31 @@ export function mountLiveOverlayView(root: HTMLElement, onOpenChange?: (open: bo
   window.setInterval(pollLiveLeagueClient, 1200);
   pollLiveLeagueClient();
 
+  // Detección de escala del HUD y minimapa (GlobalScale, FlipMiniMap) desde la configuración de LoL
+  const checkHud = () => {
+    fetchHudSettings().then((hud) => {
+      if (hud.connected) {
+        view.set({
+          detectedGlobalScale: hud.globalScale,
+          detectedMinimapScale: hud.minimapScale,
+          detectedFlipMiniMap: hud.flipMiniMap,
+        });
+      }
+    });
+  };
+  checkHud();
+
+  let hudCheckCount = 0;
+
   // Reloj de 1 segundo para descontar el Toast temporal de Visión (10s -> 0s y desaparece)
   window.setInterval(() => {
     const s = view.state;
     if (!s.open) return;
+
+    hudCheckCount++;
+    if (hudCheckCount % 8 === 0) {
+      checkHud();
+    }
 
     let nextToast = s.wardToast;
     if (nextToast) {
@@ -643,6 +704,20 @@ function renderDetectedMatchupCard(s: State): string {
   <div class="rounded-xl border border-line bg-surface/75 p-2.5 space-y-2">
     <div class="flex items-center justify-between gap-1.5">
       <span class="text-[10px] font-bold text-ink-dim truncate">${esc(s.gameModeLabel)}</span>
+      <div class="flex items-center gap-1.5">
+        ${
+          s.importToast
+            ? `<span class="chip chip-win !py-0 !px-1.5 text-[9px] font-bold animate-fade-in">${esc(s.importToast)}</span>`
+            : `<button class="btn btn-sm btn-light !h-5 !px-2 !text-[9.5px] font-bold flex items-center gap-1 shadow-sm" data-action="quick-import-lol" title="Equipa las runas y exporta la build a la tienda del LoL">
+                 <span>⚡ Importar a LoL</span>
+               </button>`
+        }
+      </div>
+    </div>
+
+    <!-- Selección de Línea -->
+    <div class="flex items-center justify-between gap-1 pt-1 border-t border-line/50">
+      <span class="text-[9.5px] font-bold uppercase text-ink-mute">Línea de Juego:</span>
       <div class="flex items-center gap-0.5">
         ${ROLES.map(
           (r) => `
@@ -780,15 +855,21 @@ function renderCompactItemPathWidget(s: State, b: BuildPreset, presets: BuildPre
 
 /**
  * 2. INDICADOR FUNDAMENTAL ARRIBA DE LAS HABILIDADES DEL LOL (PARTE INFERIOR CENTRAL)
- * Se posiciona exactamente encima de los botones Q, W, E, R del HUD de League of Legends.
+ * Se posiciona exactamente encima de los botones Q, W, E, R del HUD de League of Legends,
+ * adaptándose automáticamente a la escala de HUD del usuario (GlobalScale) y permitiendo ajuste fino.
  */
 function renderBottomAbilityHudBar(s: State, b: BuildPreset): string {
   const currentSkill = b.abilityOrder.levels[s.playerLevel - 1] || 'Q';
   const keys: ('Q' | 'W' | 'E' | 'R')[] = ['Q', 'W', 'E', 'R'];
 
+  const effectiveScale = Math.max(0.2, Math.min(1.4, s.detectedGlobalScale + s.hudScaleManualDelta));
+  const scaleCss = (0.65 + 0.35 * Math.min(1.0, effectiveScale)).toFixed(2);
+  const bottomPx = Math.round(42 + 38 * effectiveScale);
+
   return `
-  <div class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1.5 select-none">
-    <!-- Píldora superior de Nivel y Prioridad de Maxeo -->
+  <div class="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1.5 select-none transition-all duration-300"
+       style="bottom: ${bottomPx}px; transform: translateX(-50%) scale(${scaleCss}); transform-origin: bottom center;">
+    <!-- Píldora superior de Nivel y Prioridad de Maxeo + Ajuste fino de HUD -->
     <div class="flex items-center gap-2 rounded-full border border-gold/50 bg-[#08090c]/95 px-3 py-1 backdrop-blur-md shadow-[0_6px_24px_rgba(0,0,0,0.85)]">
       <img src="${champImg(s.myChampId)}" class="w-4 h-4 rounded-full border border-gold" alt="" />
       <span class="text-[10.5px] font-extrabold text-ink">
@@ -796,8 +877,16 @@ function renderBottomAbilityHudBar(s: State, b: BuildPreset): string {
       </span>
       <span class="text-[10px] font-bold text-ink-dim border-l border-line pl-2">Max: ${esc(b.abilityOrder.priorityStr)}</span>
       <div class="flex items-center gap-0.5 border-l border-line pl-1.5">
-        <button class="px-1 text-[11px] font-bold text-ink-mute hover:text-ink" data-action="level-down" title="Bajar nivel manual">−</button>
-        <button class="px-1 text-[11px] font-bold text-ink-mute hover:text-ink" data-action="level-up" title="Subir nivel manual">+</button>
+        <button class="px-1 text-[11px] font-bold text-ink-mute hover:text-ink cursor-pointer" data-action="level-down" title="Bajar nivel manual">−</button>
+        <button class="px-1 text-[11px] font-bold text-ink-mute hover:text-ink cursor-pointer" data-action="level-up" title="Subir nivel manual">+</button>
+      </div>
+
+      <!-- Ajuste fino de Escala HUD -->
+      <div class="flex items-center gap-1 border-l border-line pl-2" title="Escala detectada del HUD de League of Legends">
+        <span class="text-[8.5px] font-bold text-ink-mute uppercase">HUD:</span>
+        <button class="h-4 w-4 rounded bg-canvas border border-line text-[10px] font-bold text-ink-dim hover:text-ink flex items-center justify-center cursor-pointer" data-action="hud-scale-down" title="Reducir escala del HUD">−</button>
+        <span class="num font-mono text-[9.5px] font-extrabold text-gold">${Math.round(effectiveScale * 100)}%</span>
+        <button class="h-4 w-4 rounded bg-canvas border border-line text-[10px] font-bold text-ink-dim hover:text-ink flex items-center justify-center cursor-pointer" data-action="hud-scale-up" title="Aumentar escala del HUD">+</button>
       </div>
     </div>
 
@@ -835,13 +924,15 @@ function renderBottomAbilityHudBar(s: State, b: BuildPreset): string {
 /**
  * 3. PEQUEÑA PESTAÑA EMERGENTE (TOAST TEMPORAL DE 10 SEGUNDOS) QUE INDICA DÓNDE WARDEAR
  * Aparece automáticamente por 10 segundos y luego se cierra sola para no estorbar en partida.
+ * Si el jugador tiene FlipMiniMap activado, se ubica automáticamente en el lateral opuesto.
  */
-function renderTemporaryWardToast(toast: WardToastData): string {
+function renderTemporaryWardToast(toast: WardToastData, flipMiniMap = false): string {
   const { spot, phaseTitle, remainingSec } = toast;
   const pct = Math.max(0, Math.min(100, (remainingSec / 10) * 100));
+  const posClass = flipMiniMap ? 'bottom-44 left-4' : 'bottom-44 right-4';
 
   return `
-  <div class="fixed bottom-44 right-4 z-50 w-[320px] rounded-2xl border-2 border-gold/70 bg-[#0a0c12]/95 backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.92)] overflow-hidden select-none animate-fade-in">
+  <div class="fixed ${posClass} z-50 w-[320px] rounded-2xl border-2 border-gold/70 bg-[#0a0c12]/95 backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.92)] overflow-hidden select-none animate-fade-in">
     <div class="flex items-center justify-between gap-2 bg-gold/15 border-b border-gold/30 px-3 py-1.5">
       <div class="flex items-center gap-1.5">
         <span class="text-gold text-[12px]">👁</span>

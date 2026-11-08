@@ -111,7 +111,7 @@ function accountWidget(sync: Sync, overlayOpen: boolean): string {
 
 function controls(maximized: boolean): string {
   return `
-  <div class="ml-3 flex h-full" role="group" aria-label="Controles de ventana">
+  <div class="ml-3 flex h-full select-none" role="group" aria-label="Controles de ventana" style="-webkit-app-region: no-drag;">
     <button class="win-btn" data-action="win-min" aria-label="Minimizar">${icon('minus', 16)}</button>
     <button class="win-btn" data-action="win-max" aria-label="${maximized ? 'Restaurar' : 'Maximizar'}">${icon(maximized ? 'restore' : 'square', 15)}</button>
     <button class="win-btn win-btn-close" data-action="win-close" aria-label="Cerrar">${icon('x', 17)}</button>
