@@ -35,6 +35,21 @@ export async function isMaximized(): Promise<boolean> {
   return !!document.fullscreenElement;
 }
 
+export async function setOverlayAlwaysOnTop(active: boolean): Promise<void> {
+  if (inTauri) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_overlay_mode', { active });
+    } catch {
+      try {
+        await (await win()).setAlwaysOnTop(active);
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
 /** Notifica cambios de maximizado (para alternar el icono). Devuelve la función de baja. */
 export async function onMaximizeChange(cb: (max: boolean) => void): Promise<() => void> {
   if (inTauri) {

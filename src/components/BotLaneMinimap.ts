@@ -177,8 +177,14 @@ export function botLaneMinimap(o: MinimapOpts): string {
   const structuresSvg =
     zone === 'jungle'
       ? `
-        ${campNode(JUNGLE_CAMPS_POS.blueBuff, '#60a5fa', 'Buff Azul / Gromp', -22)}
-        ${campNode(JUNGLE_CAMPS_POS.redBuff, '#f87171', 'Buff Rojo / Dagarracos', 22)}
+        ${campNode(JUNGLE_CAMPS_POS.blueGromp, '#60a5fa', 'Gromp (Azul)', -19)}
+        ${campNode(JUNGLE_CAMPS_POS.blueBuff, '#60a5fa', 'Buff Azul (Azul)', -19)}
+        ${campNode(JUNGLE_CAMPS_POS.blueWolves, '#60a5fa', 'Lobos (Azul)', 19)}
+        ${campNode(JUNGLE_CAMPS_POS.blueRaptors, '#f87171', 'Dagarracos (Azul)', -19)}
+        ${campNode(JUNGLE_CAMPS_POS.redBuff, '#f87171', 'Buff Rojo (Azul)', 19)}
+        ${campNode(JUNGLE_CAMPS_POS.blueKrugs, '#f87171', 'Rocosos (Azul)', 19)}
+        ${campNode(JUNGLE_CAMPS_POS.redWolves, '#60a5fa', 'Lobos (Rojo)', -19)}
+        ${campNode(JUNGLE_CAMPS_POS.redBlueBuff, '#60a5fa', 'Buff Azul (Rojo)', 19)}
       `
       : `
         ${tower(allyPos, allyColor, 'Tu Torre', 21)}

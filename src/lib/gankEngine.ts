@@ -154,8 +154,15 @@ export const MID_TOWERS = {
 };
 
 export const JUNGLE_CAMPS_POS = {
-  blueBuff: { x: 3985, y: 8000 } as MapPoint,
-  redBuff: { x: 7700, y: 4135 } as MapPoint,
+  blueBuff: { x: 4460, y: 7910 } as MapPoint,
+  blueGromp: { x: 2380, y: 8400 } as MapPoint,
+  blueWolves: { x: 4135, y: 6425 } as MapPoint,
+  blueRaptors: { x: 6915, y: 5428 } as MapPoint,
+  redBuff: { x: 7700, y: 4090 } as MapPoint,
+  blueKrugs: { x: 8357, y: 2706 } as MapPoint,
+  redRaptors: { x: 7807, y: 9487 } as MapPoint,
+  redWolves: { x: 10736, y: 8446 } as MapPoint,
+  redBlueBuff: { x: 10855, y: 6915 } as MapPoint,
 };
 
 const dist = (a: MapPoint, b: MapPoint) => Math.hypot(a.x - b.x, a.y - b.y);

@@ -10,6 +10,7 @@ import {
 } from '../data/visionSpots';
 
 type MapZoom = 'full' | 'top' | 'mid' | 'bot' | 'jungle';
+type GuideTab = 'timings' | 'pinks' | 'objectives' | 'visionlines';
 
 interface State {
   role: Role;
@@ -19,7 +20,9 @@ interface State {
   showVisionRadius: boolean;
   showGankRoutes: boolean;
   showJungleCamps: boolean;
+  showControlLines: boolean;
   zoom: MapZoom;
+  guideTab: GuideTab;
 }
 
 const ZOOM_TRANSFORM: Record<MapZoom, { label: string; style: string }> = {
@@ -27,67 +30,142 @@ const ZOOM_TRANSFORM: Record<MapZoom, { label: string; style: string }> = {
   top: { label: 'Zoom Top', style: 'transform: scale(1.75) translate(18%, 18%);' },
   mid: { label: 'Zoom Mid', style: 'transform: scale(1.65) translate(0%, 0%);' },
   bot: { label: 'Zoom Bot', style: 'transform: scale(1.75) translate(-18%, -18%);' },
-  jungle: { label: 'Zoom Jungla', style: 'transform: scale(1.55) translate(8%, -4%);' },
+  jungle: { label: 'Zoom Jungla', style: 'transform: scale(1.55) translate(4%, 0%);' },
 };
 
 interface CampMarker {
   id: string;
   label: string;
-  spawn: string;
+  timer: string;
   left: number;
   top: number;
   color: string;
+  side: 'blue' | 'red' | 'river';
 }
 
+/**
+ * Los 16 puntos completos de la Grieta del Invocador sobre Mapa-lol-actualizado.jpg:
+ * - 6 Campamentos del Lado Azul (Gromp, Buff Azul, Lobos, Dagarracos, Buff Rojo, Rocosos)
+ * - 6 Campamentos del Lado Rojo (Rocosos, Buff Rojo, Dagarracos, Lobos, Buff Azul, Gromp/Sapo)
+ * - 4 Objetivos del Río (Larvas/Barón, Escurridizo Norte, Dragón Elemental, Escurridizo Sur)
+ */
 const JUNGLE_CAMP_MARKERS: CampMarker[] = [
-  { id: 'void', label: 'Larvas / Barón', spawn: '05:00 / 20:00', left: 34.0, top: 30.8, color: '#a855f7' },
-  { id: 'dragon', label: 'Dragón Elemental', spawn: '05:00', left: 65.8, top: 68.8, color: '#f97316' },
-  { id: 'blue_b', label: 'Buff Azul (Azul)', spawn: '01:30', left: 26.8, top: 46.2, color: '#38bdf8' },
-  { id: 'gromp_b', label: 'Gromp (Azul)', spawn: '01:42', left: 15.8, top: 43.2, color: '#38bdf8' },
-  { id: 'wolves_b', label: 'Lobos (Azul)', spawn: '01:30', left: 27.5, top: 56.5, color: '#38bdf8' },
-  { id: 'raptors_b', label: 'Dagarracos (Azul)', spawn: '01:30', left: 47.2, top: 63.5, color: '#ef4444' },
-  { id: 'red_b', label: 'Buff Rojo (Azul)', spawn: '01:30', left: 51.8, top: 72.2, color: '#ef4444' },
-  { id: 'krugs_b', label: 'Rocosos (Azul)', spawn: '01:42', left: 56.5, top: 82.0, color: '#ef4444' },
-  { id: 'blue_r', label: 'Buff Azul (Rojo)', spawn: '01:30', left: 73.0, top: 53.5, color: '#38bdf8' },
-  { id: 'red_r', label: 'Buff Rojo (Rojo)', spawn: '01:30', left: 48.2, top: 27.5, color: '#ef4444' },
-  { id: 'raptors_r', label: 'Dagarracos (Rojo)', spawn: '01:30', left: 52.5, top: 36.2, color: '#ef4444' },
+  // Objetivos de Río (4)
+  { id: 'void', label: 'Larvas / Barón', timer: '06:00 / 20:00', left: 34.0, top: 30.8, color: '#a855f7', side: 'river' },
+  { id: 'scuttle_top', label: 'Escurridizo Norte', timer: '03:30 (+2:30)', left: 30.2, top: 35.5, color: '#2dd4bf', side: 'river' },
+  { id: 'dragon', label: 'Dragón Elemental', timer: '05:00 (+5:00)', left: 65.8, top: 68.8, color: '#f97316', side: 'river' },
+  { id: 'scuttle_bot', label: 'Escurridizo Sur', timer: '03:30 (+2:30)', left: 69.5, top: 64.2, color: '#2dd4bf', side: 'river' },
+
+  // Lado Azul — 6 Campamentos Completos
+  { id: 'gromp_b', label: 'Gromp (Azul)', timer: '01:42 (+2:15)', left: 15.8, top: 43.2, color: '#38bdf8', side: 'blue' },
+  { id: 'blue_b', label: 'Buff Azul (Azul)', timer: '01:30 (+5:00)', left: 26.8, top: 46.2, color: '#38bdf8', side: 'blue' },
+  { id: 'wolves_b', label: 'Lobos (Azul)', timer: '01:30 (+2:15)', left: 27.5, top: 56.5, color: '#38bdf8', side: 'blue' },
+  { id: 'raptors_b', label: 'Dagarracos (Azul)', timer: '01:30 (+2:15)', left: 47.2, top: 63.5, color: '#ef4444', side: 'blue' },
+  { id: 'red_b', label: 'Buff Rojo (Azul)', timer: '01:30 (+5:00)', left: 51.8, top: 72.2, color: '#ef4444', side: 'blue' },
+  { id: 'krugs_b', label: 'Rocosos (Azul)', timer: '01:42 (+2:15)', left: 56.5, top: 82.0, color: '#ef4444', side: 'blue' },
+
+  // Lado Rojo — 6 Campamentos Completos (Rocosos, Buff Rojo, Dagarracos, Lobos, Buff Azul y Gromp/Sapo)
+  { id: 'krugs_r', label: 'Rocosos (Rojo)', timer: '01:42 (+2:15)', left: 43.8, top: 18.2, color: '#ef4444', side: 'red' },
+  { id: 'red_r', label: 'Buff Rojo (Rojo)', timer: '01:30 (+5:00)', left: 48.2, top: 27.5, color: '#ef4444', side: 'red' },
+  { id: 'raptors_r', label: 'Dagarracos (Rojo)', timer: '01:30 (+2:15)', left: 52.5, top: 36.2, color: '#ef4444', side: 'red' },
+  { id: 'wolves_r', label: 'Lobos (Rojo)', timer: '01:30 (+2:15)', left: 72.2, top: 43.2, color: '#38bdf8', side: 'red' },
+  { id: 'blue_r', label: 'Buff Azul (Rojo)', timer: '01:30 (+5:00)', left: 73.0, top: 53.5, color: '#38bdf8', side: 'red' },
+  { id: 'gromp_r', label: 'Gromp / Sapo (Rojo)', timer: '01:42 (+2:15)', left: 84.0, top: 56.8, color: '#38bdf8', side: 'red' },
 ];
 
+/** Plantas de Visión (Frutos del Vidente / Scryer's Bloom) para revelar objetivos sin hacer facecheck */
+const SCRYER_BLOOMS = [
+  { label: 'Fruto Visión (Río Norte)', left: 36.5, top: 40.5, targetX: 34.0, targetY: 30.8 },
+  { label: 'Fruto Visión (Top Rojo)', left: 42.5, top: 24.5, targetX: 31.0, targetY: 20.5 },
+  { label: 'Fruto Visión (Río Sur)', left: 63.5, top: 59.5, targetX: 65.8, targetY: 68.8 },
+  { label: 'Fruto Visión (Bot Azul)', left: 57.5, top: 75.5, targetX: 69.2, targetY: 79.5 },
+];
+
+interface GankRoute {
+  label: string;
+  timing: string;
+  points: string;
+  labelPos: [number, number];
+  color: string;
+}
+
 /**
- * Rutas actualizadas del mapa actual (Season 14+):
- * Muestran los nuevos pasillos de gank e invasión por rol.
+ * Rutas actualizadas del mapa actual con su ventana de minuto exacto.
  */
-const GANK_ROUTES_BY_ROLE: Record<Role, { label: string; points: string; color: string }[]> = {
+const GANK_ROUTES_BY_ROLE: Record<Role, GankRoute[]> = {
   top: [
-    { label: 'Gank por Río Superior (Pixel Bush)', points: '34,31 23,24.5 17,18', color: '#ff2e4d' },
-    { label: 'Gank por Nuevo Tribush Superior', points: '48,27.5 31,20.5 23,14', color: '#facc15' },
-    { label: 'Dive por Gromp / Torre Azul', points: '26,46 17.5,36.5 10.5,29', color: '#38bdf8' },
+    { label: 'Gank Full-Clear por Pixel Bush Río', timing: '03:15', points: '30.2,35.5 22.8,24.5 16.5,18.0', labelPos: [23.5, 27.8], color: '#ff2e4d' },
+    { label: 'Gank por Tribush Superior', timing: '02:40 / 04:15', points: '48.2,27.5 30.8,20.5 22.5,14.5', labelPos: [36.0, 20.0], color: '#facc15' },
+    { label: 'Dive Trasero por Gromp / Rocosos', timing: '05:30+', points: '26.8,46.2 17.5,36.2 10.5,29.5', labelPos: [18.0, 39.5], color: '#38bdf8' },
   ],
   jungle: [
-    { label: 'Invasión Río Norte ➔ Buff Azul', points: '42,39 34.5,44.5 26.8,46.2', color: '#ff2e4d' },
-    { label: 'Invasión Río Sur ➔ Buff Rojo', points: '58,61 55.2,63.5 51.8,72.2', color: '#facc15' },
-    { label: 'Contra-jungla a Dagarracos', points: '50,49 52.5,36.2 48.2,27.5', color: '#38bdf8' },
+    { label: 'Invasión Río Norte ➔ Buff Azul', timing: '01:25 / 06:50', points: '42.0,39.0 34.5,44.5 26.8,46.2', labelPos: [35.5, 42.0], color: '#ff2e4d' },
+    { label: 'Invasión Río Sur ➔ Buff Azul Rojo', timing: '06:50', points: '65.8,68.8 64.5,56.0 73.0,53.5', labelPos: [66.5, 59.0], color: '#facc15' },
+    { label: 'Raptor Ward & Robo de Dagarracos', timing: '01:20 / 04:00', points: '49.5,49.5 52.5,36.2 48.2,27.5', labelPos: [54.5, 39.5], color: '#38bdf8' },
   ],
   mid: [
-    { label: 'Gank Lateral Río Norte', points: '34,31 42.5,42.8 49.5,49.5', color: '#ff2e4d' },
-    { label: 'Gank Lateral Río Sur', points: '65.8,68.8 57.2,56.8 50.5,50.5', color: '#facc15' },
-    { label: 'Flanqueo por Rampa de Dagarracos', points: '52.5,36.2 55.5,42 50,49', color: '#38bdf8' },
+    { label: 'Gank Nivel 3 / Transición Norte', timing: '02:35', points: '34.0,34.0 42.5,42.8 49.0,49.0', labelPos: [39.5, 38.5], color: '#ff2e4d' },
+    { label: 'Gank Soporte / Jungla Río Sur', timing: '03:20 / 05:30', points: '65.8,65.0 57.2,56.8 51.0,51.0', labelPos: [60.5, 61.5], color: '#facc15' },
+    { label: 'Flanqueo por Rampa de Dagarracos', timing: '04:30+', points: '52.5,36.2 55.2,42.0 50.5,48.5', labelPos: [57.5, 43.0], color: '#38bdf8' },
   ],
   adc: [
-    { label: 'Gank por Río Inferior (Pixel Bush)', points: '65.8,68.8 76.8,75 83.5,82.5', color: '#ff2e4d' },
-    { label: 'Gank por Nuevo Pasillo Rojo (Bot)', points: '73,53.5 79,68 85,78', color: '#facc15' },
-    { label: 'Emboscada por Tribush Azul', points: '58,68 69.2,79.5 74,88', color: '#38bdf8' },
+    { label: 'Gank Post Full-Clear por Río Bot', timing: '03:15', points: '69.5,64.2 76.8,75.0 83.2,82.5', labelPos: [73.5, 71.5], color: '#ff2e4d' },
+    { label: 'Gank por Nuevo Pasillo Bot Rojo', timing: '03:30+', points: '73.0,53.5 83.2,68.5 86.0,78.0', labelPos: [81.5, 64.5], color: '#facc15' },
+    { label: 'Dive 4v2 por Tribush Defensivo Azul', timing: '05:45+', points: '58.0,68.0 69.2,79.5 73.5,87.5', labelPos: [64.5, 82.0], color: '#38bdf8' },
   ],
   support: [
-    { label: 'Rotación Roam Bot ➔ Mid', points: '76.8,75 65.8,68.8 57.2,56.8 50,50', color: '#38bdf8' },
-    { label: 'Invasión Profunda a Buff Azul Rojo', points: '76.8,75 74,61 73,53.5', color: '#facc15' },
-    { label: 'Gank Rival por Tribush Inferior', points: '65.8,68.8 69.2,79.5 76,86', color: '#ff2e4d' },
+    { label: 'Roam de Base ➔ Larvas del Vacío', timing: '05:45', points: '25.0,75.0 42.5,56.0 34.0,30.8', labelPos: [38.0, 52.0], color: '#38bdf8' },
+    { label: 'Setup de Visión Profunda a Dragón', timing: '04:30', points: '76.8,75.0 65.8,68.8 78.0,55.2', labelPos: [73.5, 60.5], color: '#facc15' },
+    { label: 'Emboscada por Tribush Inferior', timing: '03:15', points: '65.8,68.8 69.2,79.5 76.5,86.0', labelPos: [68.0, 76.5], color: '#ff2e4d' },
   ],
 };
 
-function renderRoutesSvg(role: Role, showRoutes: boolean, showCamps: boolean): string {
+function renderTacticalSvg(
+  role: Role,
+  side: 'blue' | 'red',
+  showRoutes: boolean,
+  showCamps: boolean,
+  showControlLines: boolean,
+): string {
   const routes = showRoutes ? GANK_ROUTES_BY_ROLE[role] : [];
   const camps = showCamps ? JUNGLE_CAMP_MARKERS : [];
+
+  // Líneas de frente de visión (Defensiva, Río Neutral y Profunda Ofensiva)
+  const controlLinesSvg = showControlLines
+    ? side === 'blue'
+      ? `
+        <!-- Línea de Control de Río Neutral -->
+        <polyline points="18,18 34,31 50,50 66,69 84,84" fill="none" stroke="#facc15" stroke-width="0.55" stroke-dasharray="1.8 1.4" opacity="0.8"/>
+        <!-- Línea de Visión Profunda (Cuando ganas línea) -->
+        <polyline points="31,20 48,27.5 55,42 73,53.5 83,68.5" fill="none" stroke="#38bdf8" stroke-width="0.6" stroke-dasharray="1.2 1.2" opacity="0.85"/>
+        <!-- Línea de Visión Defensiva (Cuando vas perdiendo) -->
+        <polyline points="17.5,36.2 26.8,46.2 44,55 51.8,72.2 69.2,79.5" fill="none" stroke="#ff2e4d" stroke-width="0.55" stroke-dasharray="1.2 1.2" opacity="0.8"/>
+        ${SCRYER_BLOOMS.map(
+          (b) => `
+          <g transform="translate(${b.left} ${b.top})">
+            <circle r="1.4" fill="#10b98133" stroke="#10b981" stroke-width="0.4"/>
+            <circle r="0.55" fill="#10b981"/>
+            <line x1="0" y1="0" x2="${b.targetX - b.left}" y2="${b.targetY - b.top}" stroke="#10b981" stroke-width="0.35" stroke-dasharray="0.8 0.8" opacity="0.75"/>
+          </g>`,
+        ).join('')}
+      `
+      : `
+        <!-- Línea de Control de Río Neutral -->
+        <polyline points="18,18 34,31 50,50 66,69 84,84" fill="none" stroke="#facc15" stroke-width="0.55" stroke-dasharray="1.8 1.4" opacity="0.8"/>
+        <!-- Línea de Visión Profunda para Lado Rojo -->
+        <polyline points="17.5,36.2 26.8,46.2 44.5,58 51.8,72.2 69.2,79.5" fill="none" stroke="#38bdf8" stroke-width="0.6" stroke-dasharray="1.2 1.2" opacity="0.85"/>
+        <!-- Línea de Visión Defensiva para Lado Rojo -->
+        <polyline points="30.8,20.5 48.2,27.5 55,42 73,53.5 84,56.8" fill="none" stroke="#ff2e4d" stroke-width="0.55" stroke-dasharray="1.2 1.2" opacity="0.8"/>
+        ${SCRYER_BLOOMS.map(
+          (b) => `
+          <g transform="translate(${b.left} ${b.top})">
+            <circle r="1.4" fill="#10b98133" stroke="#10b981" stroke-width="0.4"/>
+            <circle r="0.55" fill="#10b981"/>
+            <line x1="0" y1="0" x2="${b.targetX - b.left}" y2="${b.targetY - b.top}" stroke="#10b981" stroke-width="0.35" stroke-dasharray="0.8 0.8" opacity="0.75"/>
+          </g>`,
+        ).join('')}
+      `
+    : '';
 
   return `
   <svg viewBox="0 0 100 100" class="absolute inset-0 w-full h-full pointer-events-none z-5">
@@ -103,6 +181,8 @@ function renderRoutesSvg(role: Role, showRoutes: boolean, showCamps: boolean): s
       </marker>
     </defs>
 
+    ${controlLinesSvg}
+
     ${routes
       .map((r) => {
         const marker =
@@ -111,9 +191,14 @@ function renderRoutesSvg(role: Role, showRoutes: boolean, showCamps: boolean): s
             : r.color === '#facc15'
               ? 'url(#rk-arrow-gold)'
               : 'url(#rk-arrow-blue)';
+        const [lx, ly] = r.labelPos;
         return `
-        <polyline points="${r.points}" fill="none" stroke="#000000" stroke-opacity="0.65" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-        <polyline points="${r.points}" fill="none" stroke="${r.color}" stroke-width="0.75" stroke-dasharray="1.6 1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="${marker}"/>`;
+        <polyline points="${r.points}" fill="none" stroke="#000000" stroke-opacity="0.7" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="${r.points}" fill="none" stroke="${r.color}" stroke-width="0.75" stroke-dasharray="1.6 1.1" stroke-linecap="round" stroke-linejoin="round" marker-end="${marker}"/>
+        <g transform="translate(${lx} ${ly})">
+          <rect x="-4.8" y="-1.6" width="9.6" height="3.0" rx="0.8" fill="#08090ce6" stroke="${r.color}" stroke-width="0.28"/>
+          <text x="0" y="0.55" fill="${r.color}" font-size="1.65" font-weight="800" text-anchor="middle">${esc(r.timing)}</text>
+        </g>`;
       })
       .join('')}
 
@@ -121,9 +206,9 @@ function renderRoutesSvg(role: Role, showRoutes: boolean, showCamps: boolean): s
       .map(
         (c) => `
       <g transform="translate(${c.left} ${c.top})">
-        <circle r="1.7" fill="#08090ce6" stroke="${c.color}" stroke-width="0.45"/>
-        <circle r="0.7" fill="${c.color}"/>
-        <text x="0" y="3.1" fill="#f8fafc" font-size="1.85" font-weight="700" text-anchor="middle" style="paint-order:stroke;stroke:#08090c;stroke-width:0.7px">${esc(c.label)}</text>
+        <circle r="1.65" fill="#08090ce6" stroke="${c.color}" stroke-width="0.45"/>
+        <circle r="0.68" fill="${c.color}"/>
+        <text x="0" y="3.05" fill="#f8fafc" font-size="1.72" font-weight="700" text-anchor="middle" style="paint-order:stroke;stroke:#08090c;stroke-width:0.75px">${esc(c.label)}</text>
       </g>`,
       )
       .join('')}
@@ -143,7 +228,7 @@ function wardPin(spot: VisionSpot, isSelected: boolean, showRadius: boolean): st
           data-tip="${esc(spot.zoneName)} (${esc(spot.minuteRecommended)})"
           aria-label="${esc(spot.zoneName)}: ${esc(spot.minuteRecommended)}">
 
-    <!-- Radio de visión real sobre la Grieta (estilo RiftKit) -->
+    <!-- Radio de visión real sobre la Grieta -->
     ${
       showRadius && isSelected
         ? `<span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full border-2 border-dashed pointer-events-none transition-all"
@@ -221,9 +306,9 @@ function sidePanel(spot: VisionSpot | null, spots: VisionSpot[], role: Role): st
           ${icon('clock', 20)}
         </div>
         <div>
-          <div class="text-[10.5px] text-ink-mute uppercase tracking-wider font-bold">Momento Óptimo para Plantar</div>
+          <div class="text-[10.5px] text-ink-mute uppercase tracking-wider font-bold">Ventana Óptima para Plantar</div>
           <div class="num text-[20px] font-extrabold text-ink leading-tight">
-            ${esc(spot.minuteRecommended)}
+            Minuto ${esc(spot.minuteRecommended)}
           </div>
         </div>
       </div>
@@ -231,7 +316,7 @@ function sidePanel(spot: VisionSpot | null, spots: VisionSpot[], role: Role): st
       <!-- Consejo Táctico Pedagógico -->
       <div class="card-inset p-3.5 space-y-2">
         <div class="flex items-center gap-2 text-ink text-[12.5px] font-bold">
-          <span class="text-gold">${icon('spark', 15)}</span> Consejo Táctico
+          <span class="text-gold">${icon('spark', 15)}</span> Análisis Táctico del Spot
         </div>
         <p class="text-[12px] text-ink-dim leading-relaxed">
           ${esc(spot.tacticalAdvice)}
@@ -242,32 +327,35 @@ function sidePanel(spot: VisionSpot | null, spots: VisionSpot[], role: Role): st
       <div class="p-3.5 rounded-xl border border-line-strong bg-canvas flex items-start gap-2.5">
         <span class="text-crimson flex-none mt-0.5">${icon('zap', 15)}</span>
         <div class="text-[11.5px] leading-snug">
-          <strong class="text-ink font-semibold">Respuesta Táctica Inmediata:</strong>
+          <strong class="text-ink font-semibold">Respuesta Inmediata:</strong>
           <p class="text-ink-dim mt-1">${esc(spot.counterAction)}</p>
         </div>
       </div>
 
-      <!-- Leyenda de Rutas de Gank S14+ del Rol -->
+      <!-- Leyenda de Rutas de Gank S14/S15 del Rol -->
       <div class="card-inset p-3 space-y-1.5">
-        <div class="text-[10.5px] font-bold uppercase tracking-wider text-ink-mute">Rutas de Gank / Invasión en Mapa Actual</div>
+        <div class="text-[10.5px] font-bold uppercase tracking-wider text-ink-mute">Rutas y Timings de Gank (${ROLE_LABEL[role]})</div>
         ${routes
           .map(
             (r) => `
-          <div class="flex items-center gap-2 text-[11.5px] text-ink-dim">
-            <span class="w-3 h-0.5 rounded-full flex-none" style="background:${r.color}"></span>
-            <span>${esc(r.label)}</span>
+          <div class="flex items-center justify-between gap-2 text-[11.5px]">
+            <div class="flex items-center gap-2 text-ink-dim truncate">
+              <span class="w-3 h-1 rounded-full flex-none" style="background:${r.color}"></span>
+              <span class="truncate">${esc(r.label)}</span>
+            </div>
+            <span class="num font-mono text-[10.5px] font-bold" style="color:${r.color}">${esc(r.timing)}</span>
           </div>`,
           )
           .join('')}
       </div>
     </div>
 
-    <!-- Lista rápida de puntos del rol actual -->
+    <!-- Lista rápida de los 6 puntos del rol actual -->
     <div class="border-t border-line pt-3">
       <div class="text-[11px] font-bold text-ink-mute uppercase tracking-wider mb-2">
-        Puntos de este rol (${spots.length})
+        Spots de ${ROLE_LABEL[role]} (${spots.length})
       </div>
-      <div class="flex flex-col gap-1.5 max-h-[140px] overflow-y-auto pr-1">
+      <div class="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto pr-1">
         ${spots
           .map((s) => {
             const active = s.id === spot.id;
@@ -290,6 +378,191 @@ function sidePanel(spot: VisionSpot | null, spots: VisionSpot[], role: Role): st
   </div>`;
 }
 
+/**
+ * Enciclopedia Táctica de Control de Mapa, Timings de Gank, Uso de Pinks y Objetivos.
+ */
+function renderMapControlKnowledgeBase(activeTab: GuideTab): string {
+  const tabs: { id: GuideTab; label: string }[] = [
+    { id: 'timings', label: '1. Timings de Gank & Tracking (Regla 4 CS)' },
+    { id: 'pinks', label: '2. Guía Maestra de Pinks (75g)' },
+    { id: 'objectives', label: '3. Control de Objetivos (Larvas, Dragón, Barón)' },
+    { id: 'visionlines', label: '4. Líneas de Visión & Plantas' },
+  ];
+
+  let content = '';
+  if (activeTab === 'timings') {
+    content = `
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <article class="card-inset p-4 space-y-2 border-l-2 border-crimson">
+        <div class="flex items-center justify-between">
+          <span class="chip chip-crimson font-bold">02:25 – 02:45</span>
+          <span class="text-[11px] font-bold text-ink-mute">Gank Nivel 3 (3 Campamentos)</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Alerta contra Junglas de Presión Temprana</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          Campeones como <b>Lee Sin, Jarvan IV, Elise, Xin Zhao o Shaco</b> suelen limpiar solo 3 campamentos (12 CS en el marcador) e ir directo a una línea. Si enfrentas uno de ellos, coloca tu Trinket al <b>02:25</b> en lugar de esperar al minuto 3.
+        </p>
+      </article>
+
+      <article class="card-inset p-4 space-y-2 border-l-2 border-gold">
+        <div class="flex items-center justify-between">
+          <span class="chip chip-gold font-bold">03:10 – 03:30</span>
+          <span class="text-[11px] font-bold text-ink-mute">Gank Post Full-Clear (6 Campamentos)</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">La Ventana Estándar del Meta Actual</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          El 80% de los junglas completan sus 6 campamentos (24 CS) entre el <b>03:12 y 03:25</b>, justo antes de que aparezcan los dos <b>Escurridizos (03:30)</b>. Nunca pelees en tu línea al minuto 03:15 si no tienes visión del Pixel Bush del río.
+        </p>
+      </article>
+
+      <article class="card-inset p-4 space-y-2 border-l-2 border-[#38bdf8]">
+        <div class="flex items-center justify-between">
+          <span class="chip font-bold" style="color:#38bdf8;border-color:#38bdf855">Tracking Pro</span>
+          <span class="text-[11px] font-bold text-ink-mute">Leash 01:38 & Conteo de CS</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Cómo Saber Dónde Está el Jungla sin Verlo</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          • <b>Cada campamento vale exactamente 4 CS:</b> Si el jungla rival asoma con 12 CS hizo 3 campamentos; con 16 CS hizo 4; con 24 CS limpió toda su jungla.<br/>
+          • <b>Reaparición:</b> Campamentos menores cada <b>2:15 min</b> · Buffs Azul/Rojo cada <b>5:00 min</b>.
+        </p>
+      </article>
+    </div>`;
+  } else if (activeTab === 'pinks') {
+    content = `
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <article class="card-inset p-4 space-y-2 border-l-2 border-win">
+        <div class="flex items-center justify-between">
+          <span class="chip chip-win font-bold">Pink con Prioridad</span>
+          <span class="text-[11px] font-bold text-ink-mute">Cuando tú empujas la línea</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Pixel Bush de Río o Arbusto Adelantado</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          Solo planta un Pink en el río si tienes prioridad de oleada para poder defenderlo cuando el rival intente romperlo. Si el enemigo se acerca a golpear tu Pink (requiere 4 golpes), castígalo con una rotación completa de habilidades.
+        </p>
+      </article>
+
+      <article class="card-inset p-4 space-y-2 border-l-2 border-gold">
+        <div class="flex items-center justify-between">
+          <span class="chip chip-gold font-bold">Pink Defensivo</span>
+          <span class="text-[11px] font-bold text-ink-mute">Cuando te empujan bajo torre</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Tribush Propio y Entradas de Buff</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          Si estás perdiendo la línea, <b>no pongas Pinks en el río</b> (los perderás gratis). Colócalos en tu <b>Tribush defensivo</b> o en la <b>entrada de tu Buff Azul/Rojo</b> para detectar dives 3v1/4v2 e invasiones a tu jungla.
+        </p>
+      </article>
+
+      <article class="card-inset p-4 space-y-2 border-l-2 border-crimson">
+        <div class="flex items-center justify-between">
+          <span class="chip chip-crimson font-bold">Regla de Foso</span>
+          <span class="text-[11px] font-bold text-ink-mute">Dragón, Larvas y Barón</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Cómo Cegar el Foso (Y Qué NO Hacer)</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          Planta un Pink en el centro del foso antes de iniciar cualquier objetivo épico. <b>Importante:</b> cuando un centinela amarillo enemigo queda desactivado por tu Pink, <b>no lo golpees mientras haces el objetivo</b>, porque al golpearlo le devuelves 3 segundos de visión al enemigo.
+        </p>
+      </article>
+    </div>`;
+  } else if (activeTab === 'objectives') {
+    content = `
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <article class="card-inset p-4 space-y-2 border-l-2 border-[#a855f7]">
+        <div class="flex items-center justify-between">
+          <span class="chip font-bold" style="color:#a855f7;border-color:#a855f755">Min 06:00 & 14:00</span>
+          <span class="text-[11px] font-bold text-ink-mute">Foso Superior</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Larvas del Vacío (06:00) y Heraldo (14:00)</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          Al <b>05:35</b>, Top y Mid deben empujar su oleada y el Support debe rotar desde base hacia el río norte. Asegurar las Larvas otorga daño verdadero progresivo contra torres. A las <b>14:00</b> desaparecen las larvas y aparece el Heraldo de la Grieta.
+        </p>
+      </article>
+
+      <article class="card-inset p-4 space-y-2 border-l-2 border-[#f97316]">
+        <div class="flex items-center justify-between">
+          <span class="chip font-bold" style="color:#f97316;border-color:#f9731655">Min 05:00 (+5:00)</span>
+          <span class="text-[11px] font-bold text-ink-mute">Foso Inferior</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Protocolo de Dragón Elemental ("1 Minuto Antes")</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          1. <b>Min -1:00:</b> Vuelve a base, compra ítems y recarga 3 wards + 2 Pinks.<br/>
+          2. <b>Min -0:40:</b> Empuja las oleadas de Mid y Bot.<br/>
+          3. <b>Min -0:25:</b> Entra con Lente del Oráculo al río y pon un Deep Ward en la entrada del Buff Azul/Rojo enemigo.
+        </p>
+      </article>
+
+      <article class="card-inset p-4 space-y-2 border-l-2 border-gold">
+        <div class="flex items-center justify-between">
+          <span class="chip chip-gold font-bold">Min 20:00+</span>
+          <span class="text-[11px] font-bold text-ink-mute">Late Game</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">La Trampa de Barón ("Baron Bait")</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          Con el río superior completamente a oscuras para el rival, no siempre tienes que terminar el Barón: espera escondido en el arbusto del río o detrás del muro de Red/Blue a que el rival camine a revisar sin visión y gana la pelea 5v4.
+        </p>
+      </article>
+    </div>`;
+  } else {
+    content = `
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <article class="card-inset p-4 space-y-2 border-l-2 border-[#38bdf8]">
+        <div class="flex items-center justify-between">
+          <span class="chip font-bold" style="color:#38bdf8;border-color:#38bdf855">Línea Azul (Mapa)</span>
+          <span class="text-[11px] font-bold text-ink-mute">Cuando vas ganando</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Línea de Visión Ofensiva (Jungla Profunda)</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          Cuando tiras una Torre de Tier 1, los wards en el río ya no bastan. Adelanta todos tus centinelas a los <b>cruces de campamentos enemigos (Azul/Lobos y Rojo/Dagarracos)</b> para robarles toda la jungla y asfixiar su oro.
+        </p>
+      </article>
+
+      <article class="card-inset p-4 space-y-2 border-l-2 border-crimson">
+        <div class="flex items-center justify-between">
+          <span class="chip chip-crimson font-bold">Línea Roja (Mapa)</span>
+          <span class="text-[11px] font-bold text-ink-mute">Cuando vas perdiendo</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Línea de Visión Defensiva (Anti-Pick)</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          Si perdiste tus torres exteriores, <b>prohibido caminar solo al río</b>. Coloca wards en las 4 entradas de tu propia jungla y usa el Trinket Azul para farmear tus campamentos y oleadas laterales sin morir cazado.
+        </p>
+      </article>
+
+      <article class="card-inset p-4 space-y-2 border-l-2 border-win">
+        <div class="flex items-center justify-between">
+          <span class="chip chip-win font-bold">Puntos Verdes (Mapa)</span>
+          <span class="text-[11px] font-bold text-ink-mute">Frutos del Vidente</span>
+        </div>
+        <h4 class="font-bold text-ink text-[13.5px]">Uso de Plantas de Visión (Scryer's Bloom)</h4>
+        <p class="text-[12px] text-ink-dim leading-relaxed">
+          Golpea los Frutos del Vidente apuntando en diagonal hacia el foso de Dragón o Barón antes de entrar al río: revelan campeones escondidos y descubren centinelas invisibles enemigos para que los limpies sin gastar tu Lente del Oráculo.
+        </p>
+      </article>
+    </div>`;
+  }
+
+  return `
+  <section class="card p-5 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+      <div>
+        <div class="eyebrow text-gold">Enciclopedia Táctica de la Grieta</div>
+        <h3 class="text-[16px] font-extrabold text-ink mt-0.5">Guía de Ganks, Pinks, Tracking de Jungla y Control de Mapa</h3>
+      </div>
+      <div class="flex flex-wrap gap-1.5">
+        ${tabs
+          .map(
+            (t) => `
+          <button type="button" class="pill !h-8 !px-3 text-[11.5px] ${
+            activeTab === t.id ? '!border-gold !bg-gold/15 !text-gold font-bold' : ''
+          }" data-action="setGuideTab" data-tab="${t.id}">
+            ${esc(t.label)}
+          </button>`,
+          )
+          .join('')}
+      </div>
+    </div>
+    ${content}
+  </section>`;
+}
+
 export function mountVisionMap(root: HTMLElement) {
   const view = createView<State>({
     root,
@@ -300,8 +573,10 @@ export function mountVisionMap(root: HTMLElement) {
       filterType: 'all',
       showVisionRadius: true,
       showGankRoutes: true,
-      showJungleCamps: false,
+      showJungleCamps: true,
+      showControlLines: false,
       zoom: 'full',
+      guideTab: 'timings',
     },
     render: (s) => {
       const allRoleSpots = getVisionSpots(s.role, s.side);
@@ -385,16 +660,19 @@ export function mountVisionMap(root: HTMLElement) {
           <!-- Columna Izquierda: Mapa Actualizado de la Grieta del Invocador con Capas Tácticas -->
           <div class="lg:col-span-7 xl:col-span-8 card p-4 flex flex-col items-center space-y-3">
             <!-- Barra de Herramientas del Mapa (Capas RiftKit + Zoom por Sector) -->
-            <div class="w-full max-w-[640px] flex flex-wrap items-center justify-between gap-2 pb-1">
+            <div class="w-full max-w-[650px] flex flex-wrap items-center justify-between gap-2 pb-1">
               <div class="flex flex-wrap items-center gap-1.5">
                 <button type="button" class="chip cursor-pointer ${s.showVisionRadius ? 'chip-gold font-bold' : 'opacity-70'}" data-action="toggleLayer" data-layer="vision">
-                  ${icon('eye', 11)} Radio de Visión
+                  ${icon('eye', 11)} Radio Visión
                 </button>
                 <button type="button" class="chip cursor-pointer ${s.showGankRoutes ? 'chip-crimson font-bold' : 'opacity-70'}" data-action="toggleLayer" data-layer="routes">
-                  ${icon('compass', 11)} Rutas Gank / Invasión
+                  ${icon('compass', 11)} Rutas Gank + Timings
                 </button>
                 <button type="button" class="chip cursor-pointer ${s.showJungleCamps ? 'chip-win font-bold' : 'opacity-70'}" data-action="toggleLayer" data-layer="camps">
-                  ${icon('target', 11)} Campamentos Jungla
+                  ${icon('target', 11)} 16 Campamentos (Azul/Rojo)
+                </button>
+                <button type="button" class="chip cursor-pointer ${s.showControlLines ? '!border-[#38bdf8] !text-[#38bdf8] font-bold' : 'opacity-70'}" data-action="toggleLayer" data-layer="lines">
+                  ${icon('spark', 11)} Líneas Control & Plantas
                 </button>
               </div>
               <div class="flex items-center gap-1 rounded-lg border border-line bg-canvas p-0.5">
@@ -411,7 +689,7 @@ export function mountVisionMap(root: HTMLElement) {
               </div>
             </div>
 
-            <div class="relative w-full max-w-[640px] aspect-square rounded-2xl overflow-hidden border border-line-strong shadow-2xl bg-[#08090c]">
+            <div class="relative w-full max-w-[650px] aspect-square rounded-2xl overflow-hidden border border-line-strong shadow-2xl bg-[#08090c]">
               <div class="w-full h-full relative transition-transform duration-300 ease-out origin-center" style="${ZOOM_TRANSFORM[s.zoom].style}">
                 <!-- Textura oficial actualizada de la Grieta del Invocador (Mapa-lol-actualizado.jpg) -->
                 <img src="${mapImg()}"
@@ -419,8 +697,8 @@ export function mountVisionMap(root: HTMLElement) {
                      class="w-full h-full object-cover select-none"
                      draggable="false" />
 
-                <!-- Capas SVG de Rutas de Gank / Invasión y Campamentos (Estilo RiftKit) -->
-                ${renderRoutesSvg(s.role, s.showGankRoutes, s.showJungleCamps)}
+                <!-- Capas SVG de Rutas de Gank / Timings, 16 Campamentos y Líneas de Control -->
+                ${renderTacticalSvg(s.role, s.side, s.showGankRoutes, s.showJungleCamps, s.showControlLines)}
 
                 <!-- PINES ACTIVOS SOBRE EL MAPA -->
                 ${visibleSpots.map((spot) => wardPin(spot, spot.id === activeSpot?.id, s.showVisionRadius)).join('')}
@@ -435,9 +713,9 @@ export function mountVisionMap(root: HTMLElement) {
               </div>
             </div>
 
-            <div class="flex items-center justify-between w-full max-w-[640px] px-2 text-[11px] text-ink-mute">
-              <span>Mapa actualizado con los nuevos muros de Río, Pixel Bushes y pasillos de Gank.</span>
-              <span>Mostrando <strong>${visibleSpots.length}</strong> spots de ${ROLE_LABEL[s.role]}</span>
+            <div class="flex flex-wrap items-center justify-between gap-2 w-full max-w-[650px] px-2 text-[11px] text-ink-mute">
+              <span>12 Campamentos (6 Azules + 6 Rojos: Rocosos, Rojo, Dagarracos, Lobos, Azul, Gromp) + 4 Objetivos de Río.</span>
+              <span>Mostrando <strong>${visibleSpots.length}</strong> spots de ${ROLE_LABEL[s.role]} (${s.side === 'blue' ? 'Azul' : 'Rojo'})</span>
             </div>
           </div>
 
@@ -446,6 +724,9 @@ export function mountVisionMap(root: HTMLElement) {
             ${sidePanel(activeSpot, allRoleSpots, s.role)}
           </div>
         </div>
+
+        <!-- Enciclopedia Táctica Inferior (Investigación de Ganks, Pinks, Objetivos y Líneas de Visión) -->
+        ${renderMapControlKnowledgeBase(s.guideTab)}
       </div>`;
     },
     actions: {
@@ -469,11 +750,16 @@ export function mountVisionMap(root: HTMLElement) {
         const zoom = data.zoom as MapZoom;
         return { zoom };
       },
+      setGuideTab: ({ data }) => {
+        const guideTab = data.tab as GuideTab;
+        return { guideTab };
+      },
       toggleLayer: ({ data, state }) => {
         const layer = data.layer;
         if (layer === 'vision') return { showVisionRadius: !state.showVisionRadius };
         if (layer === 'routes') return { showGankRoutes: !state.showGankRoutes };
         if (layer === 'camps') return { showJungleCamps: !state.showJungleCamps };
+        if (layer === 'lines') return { showControlLines: !state.showControlLines };
       },
     },
   });
