@@ -4,15 +4,15 @@ import type { RiotTimelineDto } from '../data/api';
 import { hash01 } from './charts';
 
 /**
- * Motor del Analizador de Ganks y Visión (carril inferior).
+ * Motor del Analizador Táctico de Ganks, Visión e Invasiones de Jungla (5 Roles).
  *
- * Detecta muertes tempranas (min 0-14) del ADC/Support donde intervino el jungla o el mid enemigo,
- * comprueba si el arbusto clave por el que entró el gank (Arbusto del Río / Tribush) tenía visión
- * aliada en los 60 s previos y genera un consejo correctivo.
+ * - En líneas (Top, Mid, ADC, Support): detecta muertes tempranas (min 0-14) donde intervino
+ *   el jungla o un rotador enemigo, comprueba si el arbusto clave de entrada tenía visión aliada
+ *   en los 60 s previos y genera un diagnóstico con recomendación de Ward de Control (Pink).
+ * - En Jungla: detecta muertes tempranas por invasión a tus campamentos (Buff Azul / Gromp y
+ *   Buff Rojo / Picuchillos), evaluando si las entradas del río tenían visión defensiva.
  *
- * Coordenadas: mapa de Summoner's Rift de 14870×14870 (mismas unidades que Match-V5 Timeline).
- * Las posiciones de arbustos/torres son APROXIMADAS (esquemáticas): calibrar contra el cliente si
- * se necesita precisión de radio de visión.
+ * Coordenadas: mapa de Summoner's Rift de 14870×14870 (unidades de Match-V5 Timeline).
  */
 
 export interface MapPoint {
@@ -47,31 +47,149 @@ export interface MatchEvents {
   wards: WardEvent[];
 }
 
-/* ─────────────── Geometría del carril inferior ─────────────── */
+/* ─────────────── Geometría de los 3 carriles y la Jungla ─────────────── */
 export const MAP_SIZE = 14870;
 export const EARLY_LIMIT_SEC = 14 * 60;
 export const DARK_THRESHOLD_SEC = 60;
-export const WARD_RADIUS = 900;
+export const WARD_RADIUS = 950;
 const MOVE_SPEED = 345;
 
-export type BushId = 'river' | 'tri';
+export type GankZone = 'top' | 'mid' | 'bot' | 'jungle';
 
-export const BUSHES: Record<BushId, { label: string; article: string; from: string; pos: MapPoint }> = {
-  river: { label: 'Arbusto del Río', article: 'El arbusto del río', from: 'el río', pos: { x: 11350, y: 3550 } },
-  tri: { label: 'Tribush', article: 'El Tribush', from: 'el Tribush', pos: { x: 12600, y: 4650 } },
+export type BushId =
+  | 'river'
+  | 'tri'
+  | 'top_river'
+  | 'top_tri'
+  | 'mid_top'
+  | 'mid_bot'
+  | 'jg_blue'
+  | 'jg_red';
+
+export interface BushMeta {
+  label: string;
+  article: string;
+  from: string;
+  pos: MapPoint;
+  zone: GankZone;
+}
+
+export const BUSHES: Record<BushId, BushMeta> = {
+  // Bot lane (Season 14+ Mapa Actualizado)
+  river: {
+    label: 'Pixel Bush Río (Bot)',
+    article: 'El arbusto central del río inferior',
+    from: 'el río inferior',
+    pos: { x: 11420, y: 3720 },
+    zone: 'bot',
+  },
+  tri: {
+    label: 'Tribush Inferior',
+    article: 'El Tribush defensivo inferior',
+    from: 'el Tribush de bot',
+    pos: { x: 10290, y: 3050 },
+    zone: 'bot',
+  },
+  // Top lane (Season 14+ Mapa Actualizado)
+  top_river: {
+    label: 'Pixel Bush Río (Top)',
+    article: 'El nuevo arbusto central del río superior',
+    from: 'el río superior',
+    pos: { x: 3390, y: 11230 },
+    zone: 'top',
+  },
+  top_tri: {
+    label: 'Tribush Superior',
+    article: 'El Tribush superior',
+    from: 'el Tribush de top',
+    pos: { x: 4480, y: 11850 },
+    zone: 'top',
+  },
+  // Mid lane (Season 14+ arbustos laterales desplazados)
+  mid_top: {
+    label: 'Arbusto Río Norte (Mid)',
+    article: 'El arbusto superior del carril central',
+    from: 'el río superior (lado Vacío)',
+    pos: { x: 6320, y: 8500 },
+    zone: 'mid',
+  },
+  mid_bot: {
+    label: 'Arbusto Río Sur (Mid)',
+    article: 'El arbusto inferior del carril central',
+    from: 'el río inferior (lado Dragón)',
+    pos: { x: 8505, y: 6425 },
+    zone: 'mid',
+  },
+  // Jungla (Invasiones a campamentos en el nuevo mapa)
+  jg_blue: {
+    label: 'Entrada Río ➔ Buff Azul',
+    article: 'La rampa del río hacia tu Buff Azul',
+    from: 'la entrada del río hacia tu Buff Azul',
+    pos: { x: 5130, y: 8250 },
+    zone: 'jungle',
+  },
+  jg_red: {
+    label: 'Entrada Río ➔ Buff Rojo',
+    article: 'La entrada de Dagarracos / Río hacia tu Buff Rojo',
+    from: 'la entrada del río hacia tu Buff Rojo',
+    pos: { x: 8350, y: 5450 },
+    zone: 'jungle',
+  },
 };
 
 export const BOT_TOWERS = {
-  blueOuter: { x: 10504, y: 1029 } as MapPoint,
+  blueOuter: { x: 10410, y: 1460 } as MapPoint,
   blueInner: { x: 6919, y: 1483 } as MapPoint,
-  redOuter: { x: 13866, y: 4505 } as MapPoint,
+  redOuter: { x: 13380, y: 4490 } as MapPoint,
+};
+
+export const TOP_TOWERS = {
+  blueOuter: { x: 1460, y: 10440 } as MapPoint,
+  redOuter: { x: 4360, y: 13290 } as MapPoint,
+};
+
+export const MID_TOWERS = {
+  blueOuter: { x: 5980, y: 6450 } as MapPoint,
+  redOuter: { x: 8850, y: 8590 } as MapPoint,
+};
+
+export const JUNGLE_CAMPS_POS = {
+  blueBuff: { x: 3985, y: 8000 } as MapPoint,
+  redBuff: { x: 7700, y: 4135 } as MapPoint,
 };
 
 const dist = (a: MapPoint, b: MapPoint) => Math.hypot(a.x - b.x, a.y - b.y);
 
-/** ¿El punto cae en el carril inferior (forma de "L" a lo largo de la base inferior y el borde derecho)? */
+export function zoneForRole(role: Role): GankZone {
+  if (role === 'top') return 'top';
+  if (role === 'mid') return 'mid';
+  if (role === 'jungle') return 'jungle';
+  return 'bot';
+}
+
+export function bushesForZone(zone: GankZone): [BushId, BushId] {
+  if (zone === 'top') return ['top_river', 'top_tri'];
+  if (zone === 'mid') return ['mid_top', 'mid_bot'];
+  if (zone === 'jungle') return ['jg_blue', 'jg_red'];
+  return ['river', 'tri'];
+}
+
+/** ¿El punto cae en el carril inferior? */
 export function inBotLane(p: MapPoint): boolean {
   return (p.y < 5600 && p.x > 5200) || (p.x > 10300 && p.y < 9800);
+}
+
+/** ¿El punto cae en la zona correspondiente al rol analizado? */
+export function inRoleZone(role: Role, p: MapPoint): boolean {
+  if (role === 'adc' || role === 'support') return inBotLane(p);
+  if (role === 'top') {
+    return (p.x < 4600 && p.y > 5200) || (p.y > 9600 && p.x < 9600);
+  }
+  if (role === 'mid') {
+    return p.x > 4200 && p.x < 10600 && p.y > 4200 && p.y < 10600 && Math.abs(p.x - p.y) < 3400;
+  }
+  // Jungla: cuadrantes de jungla o río
+  return p.x > 1800 && p.x < 13000 && p.y > 1800 && p.y < 13000;
 }
 
 export const clock = (sec: number): string =>
@@ -103,7 +221,6 @@ function coverage(bush: BushId, t: number, wards: WardEvent[], creators: Set<num
   for (const w of wards) {
     if (!creators.has(w.creatorId) || w.timeSec > t) continue;
     if (exact && w.pos && dist(w.pos, BUSHES[bush].pos) > WARD_RADIUS) continue;
-    // Sin posiciones no sabemos dónde cayó el Pink: asumimos que no es permanente
     const life = exact ? WARD_LIFE[w.kind] : Math.min(WARD_LIFE[w.kind], 150);
     const end = w.timeSec + life;
     if (end >= t) {
@@ -124,9 +241,10 @@ export interface GankDiagnosis {
   pos: MapPoint;
   intruder: ParticipantDetail;
   bush: BushId;
+  zone: GankZone;
   kind: DiagnosisKind;
   darkSec: number;
-  /** Un Ward de Control en el arbusto lo habría evitado */
+  /** Un Ward de Control en el arbusto/entrada lo habría evitado */
   avoidable: boolean;
   reactionLo: number;
   reactionHi: number;
@@ -136,6 +254,7 @@ export interface GankDiagnosis {
 
 export interface GankReport {
   subject: ParticipantDetail;
+  zone: GankZone;
   isMe: boolean;
   earlyDeaths: number;
   gankDeaths: number;
@@ -145,11 +264,20 @@ export interface GankReport {
   mySide: 'blue' | 'red';
 }
 
+const ROLE_NAME_ES: Record<Role, string> = {
+  top: 'top',
+  jungle: 'jungla',
+  mid: 'mid',
+  adc: 'tirador',
+  support: 'soporte',
+};
+
 function adviceText(d: {
   kind: DiagnosisKind;
   clock: string;
   isMe: boolean;
   subjectName: string;
+  subjectRole: Role;
   intruder: ParticipantDetail;
   bush: BushId;
   darkSec: number;
@@ -158,33 +286,42 @@ function adviceText(d: {
   hi: number;
 }): string {
   const b = BUSHES[d.bush];
-  const who = d.isMe ? 'Fuiste emboscado' : `${d.subjectName} fue emboscado`;
-  const intruder = `el ${d.intruder.role === 'jungle' ? 'jungla' : 'mid'} enemigo (${d.intruder.champName})`;
-  const head = `${who} desde ${b.from} por ${intruder}.`;
-  const pink = `Colocar un Ward de Control (Pink) en ese arbusto ${d.isMe ? 'te' : 'le'} habría dado ${d.lo}-${d.hi} segundos de reacción para volver a ${d.isMe ? 'tu' : 'su'} torre.`;
+  const isJungle = d.subjectRole === 'jungle';
+  const campName = d.bush === 'jg_blue' ? 'tu campamento de Buff Azul / Gromp' : 'tu campamento de Buff Rojo / Picuchillos';
+  const who = isJungle
+    ? d.isMe
+      ? `Sufriste una invasión en ${campName}`
+      : `${d.subjectName} sufrió una invasión en ${campName}`
+    : d.isMe
+      ? 'Fuiste emboscado'
+      : `${d.subjectName} fue emboscado`;
+
+  const intruderLabel = `el ${ROLE_NAME_ES[d.intruder.role] ?? 'enemigo'} rival (${d.intruder.champName})`;
+  const head = `${who} desde ${b.from} por ${intruderLabel}.`;
+  const pink = isJungle
+    ? `Colocar un Ward de Control (Pink) en ${b.label} ${d.isMe ? 'te' : 'le'} habría dado ${d.lo}-${d.hi} segundos de aviso para abandonar el campamento o pedir rotación de tus líneas.`
+    : `Colocar un Ward de Control (Pink) en ese arbusto ${d.isMe ? 'te' : 'le'} habría dado ${d.lo}-${d.hi} segundos de reacción para replegarte hacia ${d.isMe ? 'tu' : 'su'} torre.`;
 
   if (d.kind === 'dark') {
     const label = d.darkSec >= 180 ? `${Math.floor(d.darkSec / 60)} minutos` : `${Math.max(60, Math.floor(d.darkSec / 30) * 30)} segundos`;
-    const dark = d.neverWarded ? 'no tuvo ningún ward desde el inicio de la partida' : `llevaba más de ${label} a oscuras`;
-    return `Muerte evitable al minuto ${d.clock}: ${head} ${b.article} ${dark}. ${pink}`;
+    const dark = d.neverWarded ? 'no tuvo ningún ward defensivo desde el inicio de la partida' : `llevaba más de ${label} a oscuras`;
+    return `${isJungle ? 'Invasión evitable' : 'Muerte evitable'} al minuto ${d.clock}: ${head} ${b.article} ${dark}. ${pink}`;
   }
   if (d.kind === 'expired') {
-    return `Muerte parcialmente evitable al minuto ${d.clock}: ${head} ${b.article} se había quedado sin ward hace solo ${d.darkSec} segundos. Renueva el ward antes de que expire (los amarillos duran ~90-120 s) o deja un Pink fijo ahí. ${pink}`;
+    return `${isJungle ? 'Invasión parcialmente evitable' : 'Muerte parcialmente evitable'} al minuto ${d.clock}: ${head} ${b.article} se había quedado sin visión hace solo ${d.darkSec} segundos. Renueva el centinela antes de que expire o asegura un Pink fijo ahí. ${pink}`;
   }
-  return `Muerte con visión al minuto ${d.clock}: ${head} ${b.article} tenía un ward activo, así que la información estaba disponible. Mira el minimapa cuando el jungla enemigo desaparezca de la vista y retrocede a torre en cuanto se revele.`;
+  return `${isJungle ? 'Invasión con visión' : 'Muerte con visión'} al minuto ${d.clock}: ${head} ${b.article} tenía un ward activo, por lo que el movimiento enemigo se vio en el minimapa. Retrocede de inmediato cuando veas cruzar a ${d.intruder.champName}.`;
 }
 
-/** Sujeto por defecto: tú si juegas ADC/Support; si no, el ADC aliado (o el Support). */
+/** Sujeto por defecto: el jugador principal de la partida (sea Top, Jungla, Mid, ADC o Support). */
 export function defaultSubjectId(m: DetailedMatch): number {
-  const bot = (p: ParticipantDetail) => p.role === 'adc' || p.role === 'support';
-  if (bot(m.me)) return m.me.participantId;
-  const adc = m.allies.find((p) => p.role === 'adc');
-  const sup = m.allies.find((p) => p.role === 'support');
-  return (adc ?? sup ?? m.me).participantId;
+  return m.me.participantId;
 }
 
 export function analyzeBotLane(match: DetailedMatch, subjectId: number): GankReport {
   const subject = match.allParticipants.find((p) => p.participantId === subjectId) ?? match.me;
+  const zone = zoneForRole(subject.role);
+  const [bushA, bushB] = bushesForZone(zone);
   const events = match.events;
   const byId = new Map(match.allParticipants.map((p) => [p.participantId, p]));
   const enemyRoleOf = (id: number): Role | null => {
@@ -192,10 +329,17 @@ export function analyzeBotLane(match: DetailedMatch, subjectId: number): GankRep
     return p && p.team !== subject.team ? p.role : null;
   };
 
-  // Quién pudo ver ese arbusto: tu dúo del carril inferior y el jungla aliado
+  // Quién pudo poner visión útil en esa zona: el propio jugador, el jungla y el soporte aliados
   const creators = new Set(
     match.allParticipants
-      .filter((p) => p.team === subject.team && (p.role === 'adc' || p.role === 'support' || p.role === 'jungle'))
+      .filter(
+        (p) =>
+          p.team === subject.team &&
+          (p.participantId === subject.participantId ||
+            p.role === 'jungle' ||
+            p.role === 'support' ||
+            (zone === 'bot' && p.role === 'adc')),
+      )
       .map((p) => p.participantId),
   );
 
@@ -205,16 +349,24 @@ export function analyzeBotLane(match: DetailedMatch, subjectId: number): GankRep
 
   const diagnoses: GankDiagnosis[] = [];
   for (const k of early) {
-    if (!inBotLane(k.pos)) continue;
+    if (!inRoleZone(subject.role, k.pos)) continue;
+
+    // En líneas buscamos que haya intervenido alguien que no sea su par de línea directo;
+    // en jungla cualquier enemigo dentro de tus campamentos cuenta como invasión.
     const involved = [k.killerId, ...k.assistIds].filter((id) => {
       const r = enemyRoleOf(id);
-      return r === 'jungle' || r === 'mid';
+      if (!r) return false;
+      if (zone === 'jungle') return true;
+      if (zone === 'top') return r === 'jungle' || r === 'mid' || r === 'support';
+      if (zone === 'mid') return r === 'jungle' || r === 'support' || r === 'top';
+      return r === 'jungle' || r === 'mid' || r === 'top';
     });
-    if (!involved.length) continue; // 2v2 puro: no es un gank
+    if (!involved.length) continue;
+
     const intruderId = involved.find((id) => enemyRoleOf(id) === 'jungle') ?? involved[0];
     const intruder = byId.get(intruderId)!;
 
-    const bush: BushId = dist(k.pos, BUSHES.river.pos) <= dist(k.pos, BUSHES.tri.pos) ? 'river' : 'tri';
+    const bush: BushId = dist(k.pos, BUSHES[bushA].pos) <= dist(k.pos, BUSHES[bushB].pos) ? bushA : bushB;
     const cov = coverage(bush, k.timeSec, events.wards, creators);
     const kind: DiagnosisKind = cov.warded ? 'covered' : cov.darkSec >= DARK_THRESHOLD_SEC ? 'dark' : 'expired';
 
@@ -229,6 +381,7 @@ export function analyzeBotLane(match: DetailedMatch, subjectId: number): GankRep
       pos: k.pos,
       intruder,
       bush,
+      zone,
       kind,
       darkSec: cov.darkSec,
       avoidable: kind !== 'covered',
@@ -240,6 +393,7 @@ export function analyzeBotLane(match: DetailedMatch, subjectId: number): GankRep
         clock: ck,
         isMe: subject.isMe,
         subjectName: subject.champName,
+        subjectRole: subject.role,
         intruder,
         bush,
         darkSec: cov.darkSec,
@@ -252,6 +406,7 @@ export function analyzeBotLane(match: DetailedMatch, subjectId: number): GankRep
 
   return {
     subject,
+    zone,
     isMe: subject.isMe,
     earlyDeaths: early.length,
     gankDeaths: diagnoses.length,
@@ -297,12 +452,12 @@ export function parseTimelineEvents(frames: TimelineFrame[]): Pick<MatchEvents, 
   return { kills, wards };
 }
 
-/* ─────────────── Eventos simulados (modo local) ─────────────── */
+/* ─────────────── Eventos simulados (modo local para los 5 roles) ─────────────── */
 const jitter = (seed: string, amp: number) => (hash01(seed) * 2 - 1) * amp;
 
 /**
- * Genera una línea de eventos determinista (mismo matchId → mismos eventos) para las partidas
- * del historial local, que no tienen timeline oficial.
+ * Genera una línea de eventos determinista (mismo matchId → mismos eventos) para los 5 aliados
+ * (Top, Jungla, Mid, ADC, Support), permitiendo diagnosticar ganks en las 3 líneas e invasiones de campamentos.
  */
 export function simulateMatchEvents(parts: ParticipantDetail[], durationSec: number, matchId: string): MatchEvents {
   const allies = parts.filter((p) => p.team === 'blue');
@@ -310,72 +465,131 @@ export function simulateMatchEvents(parts: ParticipantDetail[], durationSec: num
   const eRole = (r: Role) => enemies.find((e) => e.role === r);
   const lastSec = Math.max(60, durationSec - 20);
 
-  // 1) Wards base del support y el jungla aliados alrededor de los arbustos
   const wards: WardEvent[] = [];
-  for (const w of allies.filter((p) => p.role === 'support' || p.role === 'jungle')) {
-    let t = 80 + Math.floor(hash01(`${matchId}|${w.participantId}|w0`) * 40);
+  const kills: KillEvent[] = [];
+
+  // 1) Wards de cada aliado en los arbustos de su línea o entradas de jungla
+  for (const w of allies) {
+    const z = zoneForRole(w.role);
+    const [bA, bB] = bushesForZone(z);
+    let t = 75 + Math.floor(hash01(`${matchId}|${w.participantId}|w0`) * 45);
     let n = 0;
     while (t < EARLY_LIMIT_SEC + 60) {
       const r = hash01(`${matchId}|${w.participantId}|w|${n}`);
-      const target: MapPoint = r < 0.45 ? BUSHES.river.pos : r < 0.75 ? BUSHES.tri.pos : { x: 8800, y: 1500 };
+      const target: MapPoint = r < 0.52 ? BUSHES[bA].pos : BUSHES[bB].pos;
       wards.push({
         timeSec: t,
         creatorId: w.participantId,
         kind: w.role === 'support' ? 'support' : 'trinket',
         pos: {
-          x: target.x + jitter(`${matchId}|${w.participantId}|x|${n}`, 350),
-          y: target.y + jitter(`${matchId}|${w.participantId}|y|${n}`, 350),
+          x: target.x + jitter(`${matchId}|${w.participantId}|x|${n}`, 300),
+          y: target.y + jitter(`${matchId}|${w.participantId}|y|${n}`, 300),
         },
       });
-      t += 100 + Math.floor(hash01(`${matchId}|${w.participantId}|s|${n}`) * 55);
+      t += 105 + Math.floor(hash01(`${matchId}|${w.participantId}|s|${n}`) * 55);
       n++;
     }
   }
 
-  // 2) Muertes del dúo del carril inferior aliado
-  const kills: KillEvent[] = [];
-  for (const p of allies.filter((x) => x.role === 'adc' || x.role === 'support')) {
-    const deaths = Math.min(3, Math.max(p.d > 0 ? 1 : 0, Math.round(p.d / 3.5)));
-    const first = 190 + Math.floor(hash01(`${matchId}|${p.participantId}|first`) * 260);
-    const gap = 190 + Math.floor(hash01(`${matchId}|${p.participantId}|gap`) * 150);
+  // 2) Muertes tempranas por gank o invasión para cada uno de los 5 aliados
+  for (const p of allies) {
+    const z = zoneForRole(p.role);
+    const [bA, bB] = bushesForZone(z);
+    const deaths = Math.min(3, Math.max(p.d > 0 ? 1 : 0, Math.round(p.d / 3.2)));
+    const first = 175 + Math.floor(hash01(`${matchId}|${p.participantId}|first`) * 240);
+    const gap = 185 + Math.floor(hash01(`${matchId}|${p.participantId}|gap`) * 140);
 
     for (let i = 0; i < deaths; i++) {
       const t = first + i * gap;
-      if (t > lastSec) break;
+      if (t > lastSec || t > EARLY_LIMIT_SEC) break;
       const key = `${matchId}|${p.participantId}|${i}`;
-      const isGank = hash01(`${key}|gank`) < 0.8;
+      const isGank = hash01(`${key}|gank`) < 0.85;
       const jungle = eRole('jungle');
       const mid = eRole('mid');
-      const intruder = hash01(`${key}|who`) < 0.75 ? jungle ?? mid : mid ?? jungle;
-      const adc = eRole('adc');
       const sup = eRole('support');
+      const laneOpp = eRole(p.role);
+
+      const intruder =
+        z === 'mid'
+          ? hash01(`${key}|who`) < 0.72
+            ? jungle ?? sup
+            : sup ?? jungle
+          : hash01(`${key}|who`) < 0.78
+            ? jungle ?? mid
+            : mid ?? jungle;
 
       let pos: MapPoint;
       let killer: ParticipantDetail | undefined;
       const assists: ParticipantDetail[] = [];
-      if (isGank && intruder) {
-        const bush: BushId = hash01(`${key}|bush`) < 0.62 ? 'river' : 'tri';
-        const base = BUSHES[bush].pos;
-        pos = {
-          x: base.x - (1000 + hash01(`${key}|dx`) * 600),
-          y: base.y - (450 + hash01(`${key}|dy`) * 450),
-        };
-        killer = hash01(`${key}|k`) < 0.5 ? intruder : adc ?? intruder;
-        if (killer !== intruder) assists.push(intruder);
-        if (sup) assists.push(sup);
 
-        // Zona a oscuras: se retiran los wards que la cubrían justo antes de la muerte
-        if (hash01(`${key}|dark`) < 0.7) {
+      if (isGank && intruder) {
+        const bush: BushId = hash01(`${key}|bush`) < 0.56 ? bA : bB;
+        const base = BUSHES[bush].pos;
+
+        if (z === 'top') {
+          if (bush === 'top_river') {
+            pos = {
+              x: 2150 + jitter(`${key}|dx`, 260),
+              y: 12050 + jitter(`${key}|dy`, 260),
+            };
+          } else {
+            pos = {
+              x: 3150 + jitter(`${key}|dx`, 280),
+              y: 12880 + jitter(`${key}|dy`, 260),
+            };
+          }
+        } else if (z === 'mid') {
+          if (bush === 'mid_top') {
+            pos = {
+              x: 7020 + jitter(`${key}|dx`, 320),
+              y: 7780 + jitter(`${key}|dy`, 320),
+            };
+          } else {
+            pos = {
+              x: 7780 + jitter(`${key}|dx`, 320),
+              y: 7080 + jitter(`${key}|dy`, 320),
+            };
+          }
+        } else if (z === 'jungle') {
+          const camp = bush === 'jg_blue' ? JUNGLE_CAMPS_POS.blueBuff : JUNGLE_CAMPS_POS.redBuff;
+          pos = {
+            x: camp.x + jitter(`${key}|dx`, 240),
+            y: camp.y + jitter(`${key}|dy`, 240),
+          };
+        } else {
+          if (bush === 'river') {
+            pos = {
+              x: 12420 + jitter(`${key}|dx`, 300),
+              y: 2820 + jitter(`${key}|dy`, 280),
+            };
+          } else {
+            pos = {
+              x: 11250 + jitter(`${key}|dx`, 300),
+              y: 1850 + jitter(`${key}|dy`, 260),
+            };
+          }
+        }
+
+        killer = hash01(`${key}|k`) < 0.55 ? intruder : laneOpp ?? intruder;
+        if (killer !== intruder) assists.push(intruder);
+        if (laneOpp && killer !== laneOpp && !assists.includes(laneOpp)) assists.push(laneOpp);
+
+        // Si toca zona a oscuras, retiramos wards cercanos previos
+        if (hash01(`${key}|dark`) < 0.72) {
           for (let j = wards.length - 1; j >= 0; j--) {
             const w = wards[j];
             const end = w.timeSec + WARD_LIFE[w.kind];
-            if (w.pos && dist(w.pos, base) <= WARD_RADIUS && w.timeSec <= t && end >= t - 75) wards.splice(j, 1);
+            if (w.pos && dist(w.pos, base) <= WARD_RADIUS && w.timeSec <= t && end >= t - 75) {
+              wards.splice(j, 1);
+            }
           }
         }
       } else {
-        pos = { x: 8800 + jitter(`${key}|px`, 900), y: 1500 + jitter(`${key}|py`, 350) };
-        killer = adc ?? sup;
-        if (killer !== sup && sup) assists.push(sup);
+        if (z === 'top') pos = { x: 2200 + jitter(`${key}|px`, 350), y: 12300 + jitter(`${key}|py`, 350) };
+        else if (z === 'mid') pos = { x: 7400 + jitter(`${key}|px`, 420), y: 7450 + jitter(`${key}|py`, 420) };
+        else if (z === 'jungle') pos = { x: 5800 + jitter(`${key}|px`, 500), y: 6100 + jitter(`${key}|py`, 500) };
+        else pos = { x: 11800 + jitter(`${key}|px`, 500), y: 2150 + jitter(`${key}|py`, 300) };
+        killer = laneOpp ?? jungle;
       }
       if (!killer) continue;
 

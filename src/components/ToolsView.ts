@@ -45,7 +45,7 @@ export function mountToolsView(root: HTMLElement) {
       const poolEl = root.querySelector<HTMLElement>('#tools-pool-tab');
       const patchEl = root.querySelector<HTMLElement>('#tools-patch-tab');
 
-      if (buildsEl) {
+      if (buildsEl && v.state.tab === 'builds') {
         mountBuildPlanner(buildsEl);
       }
       if (visionEl && v.state.tab === 'vision') {

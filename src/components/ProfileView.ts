@@ -37,7 +37,7 @@ export function mountProfileView(root: HTMLElement) {
       const statsEl = root.querySelector<HTMLElement>('#profile-stats-tab');
       const champsEl = root.querySelector<HTMLElement>('#profile-champs-tab');
 
-      if (histEl) {
+      if (histEl && v.state.tab === 'history') {
         mountMatchHistory(histEl);
       }
       if (statsEl && v.state.tab === 'stats') {

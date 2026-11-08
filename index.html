@@ -6,7 +6,7 @@
     <meta name="color-scheme" content="dark" />
     <meta
       name="description"
-      content="Noxus Coach — coaching y analítica de League of Legends: historial, estadísticas, builds, draft y modo Clash 5v5."
+      content="Noxus Coach — coaching y analítica de League of Legends: historial, estadísticas, builds, draft y Overlay In-Game."
     />
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
@@ -17,9 +17,9 @@
       <header id="titlebar" class="titlebar" data-tauri-drag-region role="banner"></header>
       <main id="main" class="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <section id="page-profile" class="page" hidden aria-label="Perfil"></section>
-        <section id="page-tools" class="page" hidden aria-label="Herramientas"></section>
-        <section id="page-clash" class="page" hidden aria-label="Modo Clash"></section>
+        <section id="page-tools" class="page" hidden aria-label="Preparador de Builds & Draft"></section>
       </main>
+      <div id="ingame-overlay-root" aria-label="Overlay In-Game Flotante"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

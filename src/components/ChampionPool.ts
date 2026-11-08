@@ -44,7 +44,7 @@ export function mountChampionPool(root: HTMLElement) {
       add: ({ data, state }) => {
         const list = state.pools[state.role] ?? [];
         if (list.length >= 3 || !data.id || list.some((p) => p.champion === data.id)) return;
-        const pools = { ...state.pools, [state.role]: [...list, { champion: data.id, slot: (['blind', 'counter', 'pocket'][list.length] as PoolSlot)] } };
+        const pools = { ...state.pools, [state.role]: [...list, { champion: data.id, slot: (['blind', 'counter', 'pocket'][list.length] as PoolSlot) }] };
         savePools(pools); return { pools };
       },
       remove: ({ data, state }) => {

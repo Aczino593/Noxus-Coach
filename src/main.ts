@@ -4,7 +4,7 @@ import { initAssets } from './lib/assets';
 import { mountNavbar, type NavId } from './components/Navbar';
 import { mountProfileView } from './components/ProfileView';
 import { mountToolsView } from './components/ToolsView';
-import { mountClashDraftBoard } from './components/ClashDraftBoard';
+import { mountLiveOverlayView } from './components/LiveOverlayView';
 
 // Inicializar detector de fallos en imágenes de Data Dragon
 installImageFallback();
@@ -16,16 +16,15 @@ void initAssets();
 const titlebarEl = document.getElementById('titlebar');
 const profileEl = document.getElementById('page-profile');
 const toolsEl = document.getElementById('page-tools');
-const clashEl = document.getElementById('page-clash');
+const overlayRootEl = document.getElementById('ingame-overlay-root');
 
-if (!titlebarEl || !profileEl || !toolsEl || !clashEl) {
+if (!titlebarEl || !profileEl || !toolsEl || !overlayRootEl) {
   throw new Error('No se encontraron los contenedores elementales en el DOM.');
 }
 
 const pages: Record<NavId, HTMLElement> = {
   profile: profileEl,
   tools: toolsEl,
-  clash: clashEl,
 };
 
 function showPage(id: NavId) {
@@ -38,22 +37,40 @@ function showPage(id: NavId) {
   }
 }
 
-// Montar la barra superior (custom titlebar con drag region y controles nativos Tauri)
-mountNavbar(titlebarEl, (navId) => {
-  showPage(navId);
+// Montar Overlay In-Game Flotante (estilo iTero / Mobalytics)
+let navbarCtrl: ReturnType<typeof mountNavbar> | null = null;
+const overlayCtrl = mountLiveOverlayView(overlayRootEl, (open) => {
+  navbarCtrl?.setOverlayOpen(open);
 });
 
-// Montar vistas modulares
+// Montar la barra superior con acceso directo al Overlay In-Game
+navbarCtrl = mountNavbar(
+  titlebarEl,
+  (navId) => {
+    showPage(navId);
+  },
+  () => {
+    overlayCtrl.toggle();
+  },
+);
+
+// Atajo global Alt+O para abrir/cerrar el Mini-HUD Overlay In-Game en cualquier momento
+window.addEventListener('keydown', (e) => {
+  if (e.altKey && (e.key === 'o' || e.key === 'O')) {
+    e.preventDefault();
+    overlayCtrl.toggle();
+  }
+});
+
+// Montar vistas modulares principales
 mountProfileView(profileEl);
 mountToolsView(toolsEl);
-mountClashDraftBoard(clashEl);
 
 // Mostrar página inicial
 showPage('profile');
 
 // Evitar menú contextual predeterminado del navegador para emular aplicación de escritorio
 window.addEventListener('contextmenu', (e) => {
-  // Permitir menú contextual nativo únicamente en campos de texto editables
   const target = e.target as HTMLElement | null;
   if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
     return;

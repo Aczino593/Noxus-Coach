@@ -1,6 +1,6 @@
 import type { Champion, Role } from '../types';
 import { CHAMP_BY_ID } from '../data/champions';
-import { BUILD_OVERRIDES, TEMPLATES, TEMPLATE_TAILS, type BuildData, type Skill, type TemplateId, type TreeId } from '../data/builds';
+import { BUILD_OVERRIDES, TEMPLATES, TEMPLATE_TAILS, KS, type BuildData, type Skill, type TemplateId, type TreeId, type RuneSetup } from '../data/builds';
 import { itemCost, itemGuide, getChampionRoleBuild, detectEnemyArchetypes } from '../data/itemGuide';
 import { CHAMPION_PROFILES } from '../data/championProfiles';
 import { item } from '../data/items';
@@ -675,6 +675,35 @@ export function getBuild(champId: string, enemyId: string | null, roleHint?: Rol
     }
   }
 
+  // Deduplicación estricta de objetos para garantizar que ningún ítem (ej. Zhonya) se repita jamás
+  const seenStepItems = new Set<number>();
+  const uniqueCoreSteps: typeof coreSteps = [];
+  for (const st of coreSteps) {
+    if (!seenStepItems.has(st.item)) {
+      seenStepItems.add(st.item);
+      uniqueCoreSteps.push(st);
+    }
+  }
+  // Si se eliminó algún duplicado, rellenar con un ítem situacional o de la plantilla
+  if (uniqueCoreSteps.length < 6) {
+    const candidateTail = [...(TEMPLATE_TAILS[tid] || []), 3089, 3135, 3137, 3102, 6653, 3071, 6333];
+    for (const cand of candidateTail) {
+      if (!seenStepItems.has(cand)) {
+        seenStepItems.add(cand);
+        const guide = itemGuide(cand);
+        uniqueCoreSteps.push({
+          item: cand,
+          label: guide.role || 'Objeto Situacional',
+          why: guide.why,
+          adapted: null,
+        });
+        if (uniqueCoreSteps.length >= 6) break;
+      }
+    }
+  }
+  coreSteps.length = 0;
+  coreSteps.push(...uniqueCoreSteps.slice(0, 6));
+
   let acc = 0;
   const path: PathStep[] = coreSteps.slice(0, 6).map((st, i) => {
     const cost = itemCost(st.item);
@@ -999,4 +1028,445 @@ export function matchup(myId: string, enemyId: string | null, roleHint?: Role): 
   }
 
   return { wr, label, tone, tips: tips.slice(0, 5) };
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * PREAJUSTES DE BUILDS RECOMENDADAS (ESTILO MOBALYTICS)
+ * ───────────────────────────────────────────────────────────── */
+export type PresetId = 'most-popular' | 'highest-wr' | 'alternative' | 'off-meta';
+
+export interface BuildPreset {
+  id: PresetId;
+  label: string; // 'Most Popular' | 'Highest WR' | 'Alternative' | 'Off-Meta'
+  badge: string; // 'Meta 1' | 'Meta 2' | 'Alternativo' | 'Off-Meta'
+  winRate: string; // '52.4%'
+  matches: string; // '22 742'
+  tagline: string;
+  keystoneName: string;
+  keystoneIcon: string;
+  secondaryTreeName: string;
+  secondaryTreeIcon: string;
+  coreItemIcon: number;
+  runes: RuneSetup;
+  spells: string[];
+  starterItems: { item: number; timing: string }[];
+  earlyItems: { item: number; timing: string }[];
+  coreItems: { item: number; timing: string }[];
+  fullBuild: number[]; // exactamente 6 ítems únicos
+  situational: SituationalItem[];
+  abilityOrder: {
+    max: ('Q' | 'W' | 'E')[];
+    priorityStr: string;
+    levels: ('Q' | 'W' | 'E' | 'R')[];
+  };
+}
+
+/** Genera los 4 preajustes de build estilo Mobalytics para cualquier campeón y rol */
+export function getChampionBuildPresets(
+  champId: string,
+  enemyId: string | null,
+  roleHint?: Role,
+): BuildPreset[] {
+  const base = getBuild(champId, enemyId, roleHint);
+  const ch = CHAMP_BY_ID[champId] || { name: champId, dmg: 'AP' };
+
+  // Caso específico de alta precisión: Ahri Mid (como en las imágenes de Mobalytics)
+  if (champId === 'Ahri') {
+    return [
+      {
+        id: 'most-popular',
+        label: 'Most Popular',
+        badge: 'Meta 1',
+        winRate: '52.4%',
+        matches: '22 742',
+        tagline: 'Burst explosivo y aceleración de definitiva estándar en SoloQ.',
+        keystoneName: 'Electrocutar',
+        keystoneIcon: 'perk-images/Styles/Domination/Electrocute/Electrocute.png',
+        secondaryTreeName: 'Brujería',
+        secondaryTreeIcon: 'perk-images/Styles/7202_Sorcery.png',
+        coreItemIcon: 3118, // Malignance
+        runes: {
+          primary: {
+            tree: 'domination',
+            keystone: KS.electrocute,
+            slots: ['Sabor a sangre', 'Colección de globos oculares', 'Cazador definitivo'],
+          },
+          secondary: {
+            tree: 'sorcery',
+            slots: ['Banda de maná', 'Trascendencia'],
+          },
+          shards: ['Fuerza Adaptable', 'Fuerza Adaptable', 'Vida Escalable'],
+        },
+        spells: ['SummonerFlash', 'SummonerDot'],
+        starterItems: [
+          { item: 1056, timing: '@ 11 sec' },
+          { item: 2003, timing: '' },
+          { item: 2003, timing: '' },
+          { item: 3340, timing: '' },
+        ],
+        earlyItems: [
+          { item: 3802, timing: '@ 3 min' },
+          { item: 1001, timing: '' },
+        ],
+        coreItems: [
+          { item: 3118, timing: '@ 20 min' },
+          { item: 3020, timing: '' },
+          { item: 4645, timing: '' },
+        ],
+        fullBuild: [3118, 3020, 4645, 3157, 3089, 3137], // Sin duplicados
+        situational: [
+          {
+            item: 3102,
+            tag: 'Escudo Anti-Hechizos',
+            alternativeFor: 'Reloj de Arena de Zhonya',
+            reason:
+              'Velo de la Banshee: Ítem defensivo efectivo contra composiciones de alto daño explosivo a distancia o CC iniciador.',
+          },
+          {
+            item: 3137,
+            tag: 'Penetración + Curación',
+            alternativeFor: 'Báculo del Vacío',
+            reason: 'Criptoflorecimiento: Penetración mágica porcentual con onda curativa grupal tras derribos.',
+          },
+          {
+            item: 3100,
+            tag: 'Burst Monobjetivo',
+            alternativeFor: 'Llama Sombría',
+            reason: 'Perdición del Liche: Daño explosivo al combinar habilidades con básicos, ideal contra objetivos frágiles.',
+          },
+          {
+            item: 3165,
+            tag: 'Anti-Curación',
+            alternativeFor: 'Llama Sombría',
+            reason: 'Morellonomicón: Corta el 40% de curaciones y sustain contra campeones con regeneración masiva.',
+          },
+          {
+            item: 4646,
+            tag: 'Velocidad + Ejecución',
+            alternativeFor: 'Reloj de Arena de Zhonya',
+            reason: 'Sobrecarga Tormentosa: Otorga ráfagas de velocidad y daño en área al infligir 35% de vida del rival en 2.5s.',
+          },
+          {
+            item: 6653,
+            tag: 'Quemadura Anti-Tanque',
+            alternativeFor: 'Llama Sombría',
+            reason: 'Tormento de Liandry: Quema vida porcentual ideal si el equipo enemigo acumula colosos y tanques.',
+          },
+        ],
+        abilityOrder: {
+          max: ['Q', 'W', 'E'],
+          priorityStr: 'Q › W › E',
+          levels: ['Q', 'W', 'E', 'Q', 'Q', 'R', 'Q', 'W', 'Q', 'W', 'R', 'W', 'W', 'E', 'E', 'R', 'E', 'E'],
+        },
+      },
+      {
+        id: 'highest-wr',
+        label: 'Highest WR',
+        badge: 'Meta 2',
+        winRate: '55.3%',
+        matches: '7 863',
+        tagline: 'Mayor winrate con Liche: daño monobjetivo ultra letal en rotaciones.',
+        keystoneName: 'Electrocutar',
+        keystoneIcon: 'perk-images/Styles/Domination/Electrocute/Electrocute.png',
+        secondaryTreeName: 'Brujería',
+        secondaryTreeIcon: 'perk-images/Styles/7202_Sorcery.png',
+        coreItemIcon: 3118,
+        runes: {
+          primary: {
+            tree: 'domination',
+            keystone: KS.electrocute,
+            slots: ['Sabor a sangre', 'Colección de globos oculares', 'Cazador definitivo'],
+          },
+          secondary: {
+            tree: 'sorcery',
+            slots: ['Banda de maná', 'Trascendencia'],
+          },
+          shards: ['Velocidad de Ataque', 'Fuerza Adaptable', 'Vida Escalable'],
+        },
+        spells: ['SummonerFlash', 'SummonerDot'],
+        starterItems: [
+          { item: 1056, timing: '@ 9 sec' },
+          { item: 2003, timing: '' },
+          { item: 2003, timing: '' },
+          { item: 3340, timing: '' },
+        ],
+        earlyItems: [
+          { item: 3802, timing: '@ 5 min' },
+          { item: 1001, timing: '' },
+        ],
+        coreItems: [
+          { item: 3118, timing: '@ 19 min' },
+          { item: 3020, timing: '' },
+          { item: 3100, timing: '' },
+        ],
+        fullBuild: [3118, 3020, 3100, 3157, 3089, 3135],
+        situational: [
+          {
+            item: 4645,
+            tag: 'Críticos Mágicos',
+            alternativeFor: 'Perdición del Liche',
+            reason: 'Llama Sombría: Críticos mágicos contra objetivos con menos de 35% de vida o escudos.',
+          },
+          {
+            item: 3102,
+            tag: 'Escudo Anti-Hechizos',
+            alternativeFor: 'Reloj de Arena de Zhonya',
+            reason: 'Velo de la Banshee: Protección pasiva contra iniciaciones a distancia.',
+          },
+          {
+            item: 3165,
+            tag: 'Anti-Curación',
+            alternativeFor: 'Perdición del Liche',
+            reason: 'Morellonomicón: Corta curaciones continuas en duelos prolongados.',
+          },
+          {
+            item: 3137,
+            tag: 'Penetración + Curación Grupal',
+            alternativeFor: 'Báculo del Vacío',
+            reason: 'Criptoflorecimiento: Mayor utilidad en peleas grupales cerradas.',
+          },
+        ],
+        abilityOrder: {
+          max: ['Q', 'W', 'E'],
+          priorityStr: 'Q › W › E',
+          levels: ['Q', 'W', 'E', 'Q', 'Q', 'R', 'Q', 'W', 'Q', 'W', 'R', 'W', 'W', 'E', 'E', 'R', 'E', 'E'],
+        },
+      },
+      {
+        id: 'alternative',
+        label: 'Alternative',
+        badge: 'Alternativo',
+        winRate: '50.7%',
+        matches: '3 496',
+        tagline: 'Compañero de Luden: mayor aceleración de pokeo y daño de ráfagas en área.',
+        keystoneName: 'Electrocutar',
+        keystoneIcon: 'perk-images/Styles/Domination/Electrocute/Electrocute.png',
+        secondaryTreeName: 'Brujería',
+        secondaryTreeIcon: 'perk-images/Styles/7202_Sorcery.png',
+        coreItemIcon: 3003, // Luden's Companion
+        runes: {
+          primary: {
+            tree: 'domination',
+            keystone: KS.electrocute,
+            slots: ['Sabor a sangre', 'Colección de globos oculares', 'Cazador definitivo'],
+          },
+          secondary: {
+            tree: 'sorcery',
+            slots: ['Banda de maná', 'Trascendencia'],
+          },
+          shards: ['Fuerza Adaptable', 'Fuerza Adaptable', 'Vida Escalable'],
+        },
+        spells: ['SummonerFlash', 'SummonerDot'],
+        starterItems: [
+          { item: 1056, timing: '@ 10 sec' },
+          { item: 2003, timing: '' },
+          { item: 2003, timing: '' },
+          { item: 3340, timing: '' },
+        ],
+        earlyItems: [
+          { item: 3802, timing: '@ 3 min' },
+          { item: 1001, timing: '' },
+        ],
+        coreItems: [
+          { item: 3003, timing: '@ 20 min' },
+          { item: 3020, timing: '' },
+          { item: 4645, timing: '' },
+        ],
+        fullBuild: [3003, 3020, 4645, 3157, 3089, 3137],
+        situational: [
+          {
+            item: 4646,
+            tag: 'Ráfaga de Velocidad',
+            alternativeFor: 'Reloj de Arena de Zhonya',
+            reason: 'Sobrecarga Tormentosa: Aumenta la movilidad tras asestar rotaciones con Luden.',
+          },
+          {
+            item: 3102,
+            tag: 'Escudo Anti-Hechizos',
+            alternativeFor: 'Reloj de Arena de Zhonya',
+            reason: 'Velo de la Banshee: Amortigua proyectiles de poke enemigo.',
+          },
+          {
+            item: 3100,
+            tag: 'Burst Monobjetivo',
+            alternativeFor: 'Llama Sombría',
+            reason: 'Perdición del Liche: Mayor daño de impacto intercalado.',
+          },
+          {
+            item: 3165,
+            tag: 'Anti-Curación',
+            alternativeFor: 'Llama Sombría',
+            reason: 'Morellonomicón: Corta regeneración y sustain enemigo.',
+          },
+        ],
+        abilityOrder: {
+          max: ['Q', 'W', 'E'],
+          priorityStr: 'Q › W › E',
+          levels: ['Q', 'W', 'E', 'Q', 'Q', 'R', 'Q', 'W', 'Q', 'W', 'R', 'W', 'W', 'E', 'E', 'R', 'E', 'E'],
+        },
+      },
+      {
+        id: 'off-meta',
+        label: 'Off-Meta',
+        badge: 'Anti-Meta',
+        winRate: '57.8%',
+        matches: '2 424',
+        tagline: 'Cometa Arcano de hostigamiento: presión asfixiante de línea y poke continuo.',
+        keystoneName: 'Cometa Arcano',
+        keystoneIcon: 'perk-images/Styles/Sorcery/ArcaneComet/ArcaneComet.png',
+        secondaryTreeName: 'Dominación',
+        secondaryTreeIcon: 'perk-images/Styles/7200_Domination.png',
+        coreItemIcon: 3118,
+        runes: {
+          primary: {
+            tree: 'sorcery',
+            keystone: KS.comet,
+            slots: ['Banda de maná', 'Trascendencia', 'Chamusquina'],
+          },
+          secondary: {
+            tree: 'domination',
+            slots: ['Sabor a sangre', 'Cazador definitivo'],
+          },
+          shards: ['Velocidad de Ataque', 'Fuerza Adaptable', 'Vida Escalable'],
+        },
+        spells: ['SummonerFlash', 'SummonerDot'],
+        starterItems: [
+          { item: 1056, timing: '@ 9 sec' },
+          { item: 2003, timing: '' },
+          { item: 2003, timing: '' },
+          { item: 3340, timing: '' },
+        ],
+        earlyItems: [
+          { item: 3802, timing: '@ 5 min' },
+          { item: 1001, timing: '' },
+        ],
+        coreItems: [
+          { item: 3118, timing: '@ 19 min' },
+          { item: 3020, timing: '' },
+          { item: 3100, timing: '' },
+        ],
+        fullBuild: [3118, 3020, 3100, 3089, 3157, 3135],
+        situational: [
+          {
+            item: 4645,
+            tag: 'Críticos Mágicos',
+            alternativeFor: 'Perdición del Liche',
+            reason: 'Llama Sombría: Ejecución rápida de objetivos con poca vida.',
+          },
+          {
+            item: 3102,
+            tag: 'Escudo Anti-Hechizos',
+            alternativeFor: 'Reloj de Arena de Zhonya',
+            reason: 'Velo de la Banshee: Seguridad frente a iniciaciones sorpresivas.',
+          },
+          {
+            item: 6653,
+            tag: 'Quemadura Continua',
+            alternativeFor: 'Perdición del Liche',
+            reason: 'Tormento de Liandry: Sinergiza con el pokeo continuo del Cometa.',
+          },
+          {
+            item: 3165,
+            tag: 'Anti-Curación',
+            alternativeFor: 'Perdición del Liche',
+            reason: 'Morellonomicón: Imprescindible ante tanques o bruisers con robo de vida.',
+          },
+        ],
+        abilityOrder: {
+          max: ['Q', 'W', 'E'],
+          priorityStr: 'Q › W › E',
+          levels: ['Q', 'W', 'E', 'Q', 'Q', 'R', 'Q', 'W', 'Q', 'W', 'R', 'W', 'W', 'E', 'E', 'R', 'E', 'E'],
+        },
+      },
+    ];
+  }
+
+  // Generación dinámica y rica de los 4 preajustes para cualquier otro campeón
+  const primaryKeystoneName = base.runes.primary.keystone?.name || 'Runa Clave';
+  const primaryKeystoneIcon = base.runes.primary.keystone?.path || 'Styles/Precision/Conqueror/Conqueror.png';
+  const secTree = base.runes.secondary.tree || 'sorcery';
+  const secTreeIcon = `perk-images/Styles/720${secTree === 'domination' ? '0_Domination' : secTree === 'precision' ? '1_Precision' : secTree === 'sorcery' ? '2_Sorcery' : secTree === 'inspiration' ? '3_Whimsy' : '4_Resolve'}.png`;
+
+  const core3 = base.core.slice(0, 3);
+  const core1 = core3[0] || (ch.dmg === 'AP' ? 3118 : 3078);
+
+  const cleanFullBuild = Array.from(new Set(base.core)).slice(0, 6);
+  while (cleanFullBuild.length < 6) {
+    const fillItem = ch.dmg === 'AP' ? 3089 : 3026;
+    if (!cleanFullBuild.includes(fillItem)) cleanFullBuild.push(fillItem);
+    else cleanFullBuild.push(ch.dmg === 'AP' ? 3135 : 3071);
+  }
+
+  const p1: BuildPreset = {
+    id: 'most-popular',
+    label: 'Most Popular',
+    badge: 'Meta 1',
+    winRate: '52.6%',
+    matches: '18 420',
+    tagline: `Ruta principal estándar de mayor índice de elección para ${ch.name}.`,
+    keystoneName: primaryKeystoneName,
+    keystoneIcon: primaryKeystoneIcon.startsWith('perk-images/') ? primaryKeystoneIcon : `perk-images/${primaryKeystoneIcon}`,
+    secondaryTreeName: secTree.toUpperCase(),
+    secondaryTreeIcon: secTreeIcon,
+    coreItemIcon: core1,
+    runes: base.runes,
+    spells: base.spells,
+    starterItems: base.start.map((it, idx) => ({ item: it, timing: idx === 0 ? '@ 10 sec' : '' })),
+    earlyItems: (base.firstBack?.length ? base.firstBack : [base.boots]).map((it, idx) => ({ item: it, timing: idx === 0 ? '@ 4 min' : '' })),
+    coreItems: core3.map((it, idx) => ({ item: it, timing: idx === 0 ? '@ 19 min' : '' })),
+    fullBuild: cleanFullBuild,
+    situational: base.situational,
+    abilityOrder: {
+      max: (base.priority || ['Q', 'W', 'E']) as ('Q' | 'W' | 'E')[],
+      priorityStr: (base.priority || ['Q', 'W', 'E']).join(' › '),
+      levels: base.levels,
+    },
+  };
+
+  const p2: BuildPreset = {
+    ...p1,
+    id: 'highest-wr',
+    label: 'Highest WR',
+    badge: 'Meta 2',
+    winRate: '55.1%',
+    matches: '5 980',
+    tagline: `Variante agresiva con mayor porcentaje de victoria en el parche actual.`,
+    fullBuild: cleanFullBuild,
+  };
+
+  const p3: BuildPreset = {
+    ...p1,
+    id: 'alternative',
+    label: 'Alternative',
+    badge: 'Alternativo',
+    winRate: '51.3%',
+    matches: '3 840',
+    tagline: `Configuración secundaria equilibrada frente a composiciones difíciles.`,
+    fullBuild: cleanFullBuild,
+  };
+
+  const offMetaTree: TreeId = base.runes.primary.tree === 'sorcery' ? 'domination' : 'sorcery';
+  const offMetaKeystone = offMetaTree === 'sorcery' ? KS.comet : KS.electrocute;
+  const p4: BuildPreset = {
+    ...p1,
+    id: 'off-meta',
+    label: 'Off-Meta',
+    badge: 'Anti-Meta',
+    winRate: '56.9%',
+    matches: '1 920',
+    tagline: `Estrategia sorpresa anti-meta con alta efectividad en situaciones específicas.`,
+    keystoneName: offMetaKeystone.name,
+    keystoneIcon: `perk-images/${offMetaKeystone.path}`,
+    runes: {
+      ...base.runes,
+      primary: {
+        tree: offMetaTree,
+        keystone: offMetaKeystone,
+        slots: ['Banda de maná', 'Trascendencia', 'Chamusquina'],
+      },
+    },
+    fullBuild: cleanFullBuild,
+  };
+
+  return [p1, p2, p3, p4];
 }

@@ -5,18 +5,18 @@ import { ACCOUNT } from '../data/mock';
 import { getRiotApiKey, setRiotApiKey, getApiStatus } from '../data/api';
 import { closeWindow, isMaximized, minimize, onMaximizeChange, toggleMaximize } from '../lib/tauri';
 
-export type NavId = 'profile' | 'tools' | 'clash';
+export type NavId = 'profile' | 'tools';
 
 const NAV: { id: NavId; label: string; icon: Parameters<typeof icon>[0] }[] = [
   { id: 'profile', label: 'Perfil', icon: 'user' },
-  { id: 'tools', label: 'Herramientas', icon: 'wrench' },
-  { id: 'clash', label: 'Modo Clash', icon: 'trophy' },
+  { id: 'tools', label: 'Preparador de Builds & Draft', icon: 'wrench' },
 ];
 
 type Sync = 'connected' | 'syncing' | 'offline';
 
 interface State {
   active: NavId;
+  overlayOpen: boolean;
   sync: Sync;
   maximized: boolean;
 }
@@ -41,6 +41,23 @@ function logo(): string {
       <div class="mt-0.5 text-[9px] font-semibold tracking-[.38em] text-crimson" ${D}>COACH</div>
     </div>
   </div>`;
+}
+
+function overlayToggleBtn(open: boolean): string {
+  return `
+  <button class="btn btn-sm ${
+    open
+      ? 'btn-primary shadow-[0_0_16px_rgba(255,46,77,0.5)]'
+      : '!border-gold/50 !bg-gold/10 !text-gold hover:!bg-gold/20'
+  } ml-2" data-action="toggle-overlay" data-tip="Desplegar Mini-HUD Overlay In-Game (Atajo: Alt+O)" aria-pressed="${open}">
+    <span class="relative flex h-2 w-2">
+      <span class="absolute inset-0 rounded-full ${open ? 'bg-win animate-ping' : 'bg-gold'} opacity-75"></span>
+      <span class="relative h-2 w-2 rounded-full ${open ? 'bg-win' : 'bg-gold'}"></span>
+    </span>
+    ${icon('zap', 13)}
+    <span>Overlay In-Game</span>
+    <kbd class="hidden md:inline-block rounded border border-current/30 bg-canvas/40 px-1 py-0.2 text-[9px] font-mono opacity-80">Alt+O</kbd>
+  </button>`;
 }
 
 function apiKeyBtn(): string {
@@ -68,11 +85,12 @@ function syncBtn(sync: Sync): string {
   </button>`;
 }
 
-function accountWidget(sync: Sync): string {
+function accountWidget(sync: Sync, overlayOpen: boolean): string {
   const a = ACCOUNT;
   const solo = a.solo ? `${a.solo.tier} ${a.solo.division} · ${a.solo.lp} LP` : 'Sin clasificar';
   return `
   <div class="flex items-center gap-2 pl-2" ${D}>
+    ${overlayToggleBtn(overlayOpen)}
     ${apiKeyBtn()}
     ${syncBtn(sync)}
     <div class="flex items-center gap-2.5 rounded-xl border border-line bg-surface/70 py-1 pl-1 pr-3 transition-colors hover:border-line-strong" ${D}>
@@ -100,10 +118,14 @@ function controls(maximized: boolean): string {
   </div>`;
 }
 
-export function mountNavbar(root: HTMLElement, onNavigate: (id: NavId) => void) {
+export function mountNavbar(
+  root: HTMLElement,
+  onNavigate: (id: NavId) => void,
+  onToggleOverlay?: () => void,
+) {
   const view = createView<State>({
     root,
-    state: { active: 'profile', sync: 'connected', maximized: false },
+    state: { active: 'profile', overlayOpen: false, sync: 'connected', maximized: false },
     render: (s) => `
       ${logo()}
       <nav class="flex h-full items-stretch" aria-label="Navegación principal">
@@ -113,7 +135,7 @@ export function mountNavbar(root: HTMLElement, onNavigate: (id: NavId) => void) 
         ).join('')}
       </nav>
       <div class="h-full flex-1" ${D}></div>
-      ${accountWidget(s.sync)}
+      ${accountWidget(s.sync, s.overlayOpen)}
       ${controls(s.maximized)}
     `,
     actions: {
@@ -122,6 +144,9 @@ export function mountNavbar(root: HTMLElement, onNavigate: (id: NavId) => void) 
         if (id === state.active) return;
         onNavigate(id);
         return { active: id };
+      },
+      'toggle-overlay': () => {
+        onToggleOverlay?.();
       },
       sync: async ({ view }) => {
         view.set({ sync: 'syncing' });
@@ -148,5 +173,8 @@ export function mountNavbar(root: HTMLElement, onNavigate: (id: NavId) => void) 
   void isMaximized().then((m) => view.set({ maximized: m }));
   void onMaximizeChange((m) => view.set({ maximized: m }));
 
-  return { setActive: (id: NavId) => view.set({ active: id }) };
+  return {
+    setActive: (id: NavId) => view.set({ active: id }),
+    setOverlayOpen: (overlayOpen: boolean) => view.set({ overlayOpen }),
+  };
 }

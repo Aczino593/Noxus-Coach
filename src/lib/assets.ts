@@ -182,8 +182,8 @@ export function itemCdImg(id: number): string {
 export const spellImg = (key: string) => `${CDN}/cdn/${version}/img/spell/${key}.png`;
 export const profileImg = (id: number) => `${CDN}/cdn/${version}/img/profileicon/${id}.png`;
 export const perkImg = (path: string) => `${CDN}/cdn/img/perk-images/${path}`;
-export const mapImg = () => '/maps/summoners_rift.png';
-export const CDRAGON_MINIMAP_URL = '/maps/summoners_rift.png';
+export const mapImg = () => '/maps/Mapa-lol-actualizado.jpg';
+export const CDRAGON_MINIMAP_URL = '/maps/Mapa-lol-actualizado.jpg';
 
 /* ─────────────────────────────────────────────────────────────
  * ICONOS OFICIALES DE ROLES (COMMUNITYDRAGON / RIOT CLIENT)

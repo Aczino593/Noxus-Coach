@@ -26,31 +26,177 @@ interface State {
   isLive: boolean;
   apiNotice?: string;
   aggregated?: AggregatedDataResult;
+  showSuggestions?: boolean;
+  searchQuery?: string;
 }
 
-const QUEUES: Queue[] = ['solo', 'flex', 'quick', 'clash'];
+const QUEUES: Queue[] = ['solo', 'flex', 'quick'];
 const draft = { region: ACCOUNT.region, name: ACCOUNT.name, tag: ACCOUNT.tag };
 
-/* ─────────────── Cabecera: buscador + cuenta ─────────────── */
+export interface TrackedPlayer {
+  id: string;
+  name: string;
+  tag: string;
+  region: string;
+  shortRank: string; // ej. 'S3', 'E1', 'B1', 'C1', ''
+  rankColor: string;
+  iconId: number;
+}
+
+const KNOWN_PROFILES: TrackedPlayer[] = [
+  { id: 'aczi-main', name: 'Aczi593', tag: 'Aczi', region: 'LAS', shortRank: 'S3', rankColor: '#94a3b8', iconId: 4568 },
+  { id: 'aczi-las', name: 'Aczi593', tag: 'LAS', region: 'LAS', shortRank: 'G2', rankColor: '#eab308', iconId: 29 },
+  { id: 'july-1', name: 'JULY3P', tag: '1212', region: 'LAS', shortRank: '', rankColor: '#94a3b8', iconId: 588 },
+  { id: 'july-2', name: 'JULY3P SIN LUZ', tag: '777', region: 'LAS', shortRank: 'E1', rankColor: '#10b981', iconId: 4050 },
+  { id: 'july-3', name: 'July3P ssj3', tag: 'LAS', region: 'LAS', shortRank: 'B1', rankColor: '#d97706', iconId: 6 },
+  { id: 'july-4', name: 'July3p Reloaded', tag: 'LAN', region: 'LAN', shortRank: 'S3', rankColor: '#94a3b8', iconId: 3542 },
+  { id: 'july-5', name: 'july3p', tag: '00000', region: 'LAS', shortRank: 'S4', rankColor: '#94a3b8', iconId: 4321 },
+  { id: 'josedeodo', name: 'Josedeodo', tag: 'LAS', region: 'LAS', shortRank: 'C1', rankColor: '#38bdf8', iconId: 29 },
+  { id: 'seiya', name: 'Seiya', tag: 'LAN', region: 'LAN', shortRank: 'C1', rankColor: '#38bdf8', iconId: 30 },
+  { id: 'faker', name: 'Faker', tag: 'KR1', region: 'KR', shortRank: 'C1', rankColor: '#38bdf8', iconId: 6 },
+  { id: 'chovy', name: 'Chovy', tag: 'KR1', region: 'KR', shortRank: 'C1', rankColor: '#38bdf8', iconId: 588 },
+  { id: 'caps', name: 'Caps', tag: 'EUW', region: 'EUW', shortRank: 'C1', rankColor: '#38bdf8', iconId: 548 },
+  { id: 'agurin', name: 'Agurin', tag: 'EUW', region: 'EUW', shortRank: 'C1', rankColor: '#38bdf8', iconId: 541 },
+];
+
+function rankCrestSvg(color: string): string {
+  return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" class="inline-block flex-none">
+    <path d="M2 5L5.5 8L8 3.5L10.5 8L14 5L12.5 12H3.5L2 5Z" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" fill="${color}33"/>
+  </svg>`;
+}
+
+function getProfileSuggestions(rawInput: string, currentRegion: string): TrackedPlayer[] {
+  const clean = rawInput.trim();
+  const [namePart, tagPart] = clean.split('#').map((s) => s.trim());
+  const q = (namePart || '').toLowerCase();
+
+  if (!q) {
+    return KNOWN_PROFILES.slice(0, 6);
+  }
+
+  const matches = KNOWN_PROFILES.filter(
+    (p) =>
+      p.name.toLowerCase().includes(q) ||
+      p.tag.toLowerCase().includes((tagPart || q).toLowerCase()),
+  );
+
+  // Generar perfiles dinámicos realistas al estilo Mobalytics si el usuario escribe cualquier nombre nuevo
+  const exactExists = matches.some((p) => p.name.toLowerCase() === q);
+  const dynamic: TrackedPlayer[] = [];
+  if (!exactExists && namePart.length >= 2) {
+    const hash = Array.from(namePart).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    const primaryTag = tagPart || (currentRegion === 'LAS' ? namePart.slice(0, 4) : currentRegion);
+    dynamic.push(
+      {
+        id: `dyn-1-${q}`,
+        name: namePart,
+        tag: primaryTag,
+        region: currentRegion || 'LAS',
+        shortRank: 'S3',
+        rankColor: '#94a3b8',
+        iconId: 4568 + (hash % 25),
+      },
+      {
+        id: `dyn-2-${q}`,
+        name: `${namePart}`,
+        tag: currentRegion || 'LAS',
+        region: currentRegion || 'LAS',
+        shortRank: 'E1',
+        rankColor: '#10b981',
+        iconId: 500 + (hash % 80),
+      },
+      {
+        id: `dyn-3-${q}`,
+        name: `${namePart} Reloaded`,
+        tag: 'LAN',
+        region: 'LAN',
+        shortRank: 'G2',
+        rankColor: '#eab308',
+        iconId: 3500 + (hash % 40),
+      },
+    );
+  }
+
+  return [...matches, ...dynamic].slice(0, 6);
+}
+
+function renderSuggestionsDropdown(): string {
+  const raw = draft.tag ? `${draft.name}` : draft.name;
+  const profiles = getProfileSuggestions(raw, draft.region);
+
+  return `
+  <div class="absolute top-full left-0 right-0 mt-1 z-50 rounded-b-xl rounded-t-md border border-line-strong bg-[#11131a] py-2 shadow-[0_14px_40px_rgba(0,0,0,0.9)] overflow-hidden">
+    <div class="px-3.5 py-1.5 text-[10.5px] font-bold uppercase tracking-wider text-ink-mute select-none">
+      PROFILES
+    </div>
+    <div class="divide-y divide-line/40">
+      ${profiles
+        .map(
+          (p) => `
+        <button type="button"
+                class="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-surface-2/80 cursor-pointer transition-colors text-left"
+                data-action="pick-suggestion"
+                data-name="${esc(p.name)}"
+                data-tag="${esc(p.tag)}"
+                data-region="${esc(p.region)}">
+          <img src="${profileImg(p.iconId)}" class="w-8 h-8 rounded-full border border-gold/70 object-cover flex-none" alt="" />
+          <div class="flex items-center flex-wrap gap-1.5 min-w-0">
+            <span class="text-[13px] font-bold text-white truncate">${esc(p.name)}<span class="font-normal text-ink-mute">#${esc(p.tag)}</span></span>
+            <span class="rounded bg-[#252836] px-1.5 py-0.5 text-[10px] font-bold text-ink-dim uppercase tracking-wide">${esc(p.region)}</span>
+            ${
+              p.shortRank
+                ? `<span class="inline-flex items-center gap-1 text-[12px] font-bold ml-0.5" style="color:${p.rankColor}">
+                    ${rankCrestSvg(p.rankColor)}
+                    <span>${esc(p.shortRank)}</span>
+                  </span>`
+                : ''
+            }
+          </div>
+        </button>`,
+        )
+        .join('')}
+    </div>
+  </div>`;
+}
+
+/* ─────────────── Cabecera: buscador estilo Mobalytics + cuenta ─────────────── */
 function searchBar(s: State): string {
   return `
-  <form id="form-summoner-search" class="card flex flex-wrap items-center gap-3 p-3.5" data-submit="search" onsubmit="event.preventDefault();">
-    <div class="field" style="min-width:210px">
-      <label for="input-summoner-region">Región</label>
-      <select id="input-summoner-region" data-change="region">
-        ${REGIONS.map((r) => `<option value="${r.id}" ${r.id === draft.region ? 'selected' : ''}>${r.label}</option>`).join('')}
-      </select>
+  <form id="form-summoner-search" class="card flex flex-wrap items-center gap-2.5 p-3" data-submit="search" onsubmit="event.preventDefault();">
+    <!-- Selector compacto de Región -->
+    <select id="input-summoner-region" data-change="region" aria-label="Región"
+            class="h-10 rounded-lg border border-line-strong bg-canvas px-2.5 text-[12.5px] font-semibold text-ink focus:border-gold focus:outline-none">
+      ${REGIONS.map((r) => `<option value="${r.id}" ${r.id === draft.region ? 'selected' : ''}>${r.label}</option>`).join('')}
+    </select>
+
+    <!-- Buscador limpio estilo Mobalytics -->
+    <div class="relative flex-1" style="min-width:240px">
+      <div class="relative flex items-center">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-mute pointer-events-none">${icon('search', 15)}</span>
+        <input id="input-summoner-name"
+               data-input="name"
+               data-action="open-suggestions"
+               value="${esc(draft.name)}"
+               autocomplete="off"
+               spellcheck="false"
+               placeholder="Buscar invocador (ej. Aczi593 o Nombre#TAG)"
+               class="h-10 w-full rounded-lg border border-line-strong bg-canvas pl-9 pr-24 text-[13px] font-medium text-ink placeholder:text-ink-mute focus:border-gold focus:outline-none transition-colors" />
+        <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <span class="text-[11px] font-mono text-ink-mute">#</span>
+          <input id="input-summoner-tag"
+                 data-input="tag"
+                 value="${esc(draft.tag)}"
+                 autocomplete="off"
+                 spellcheck="false"
+                 placeholder="TAG"
+                 aria-label="Lema (#TAG)"
+                 class="h-7 w-14 rounded bg-surface-2 px-1.5 text-[11.5px] font-semibold text-ink placeholder:text-ink-mute focus:outline-none" />
+        </div>
+      </div>
+      ${s.showSuggestions ? renderSuggestionsDropdown() : ''}
     </div>
-    <div class="field" style="min-width:190px">
-      <label for="input-summoner-name">Nombre del invocador</label>
-      <input id="input-summoner-name" data-input="name" value="${esc(draft.name)}" autocomplete="off" spellcheck="false" placeholder="Invocador"/>
-    </div>
-    <div class="field" style="min-width:120px">
-      <label for="input-summoner-tag">Lema (#TAG)</label>
-      <input id="input-summoner-tag" data-input="tag" value="${esc(draft.tag)}" autocomplete="off" spellcheck="false" placeholder="TAG"/>
-    </div>
-    <button type="button" class="btn" data-action="reset">Restablecer</button>
-    <button type="submit" class="btn btn-light" data-action="search">${icon('search', 14)} Buscar</button>
+
+    <button type="submit" class="btn btn-light !h-10 px-4" data-action="search">${icon('search', 14)} Buscar</button>
 
     <div class="ml-auto flex items-center gap-3 rounded-xl border border-line bg-canvas px-3 py-2">
       <img src="${profileImg(s.account.profileIcon)}" width="44" height="44" alt="" class="rounded-xl border border-crimson/50" data-fb="${esc(s.account.name.slice(0, 2).toUpperCase())}" style="width:44px;height:44px;border-radius:12px"/>
@@ -83,7 +229,7 @@ function filters(s: State): string {
   return `
   <div class="mt-3 flex flex-wrap items-center gap-2">
     ${QUEUES.map(
-      (q) => `<button class="pill" aria-pressed="${s.queue === q}" data-action="queue" data-id="${q}">${q === 'clash' ? icon('trophy', 13) : ''}${QUEUE_LABEL[q]}</button>`,
+      (q) => `<button class="pill" aria-pressed="${s.queue === q}" data-action="queue" data-id="${q}">${QUEUE_LABEL[q]}</button>`,
     ).join('')}
     <span class="mx-1 h-6 w-px bg-line"></span>
     <div class="flex gap-1.5">
@@ -406,6 +552,30 @@ export function mountMatchHistory(root: HTMLElement) {
         Object.assign(draft, { region: ACCOUNT.region, name: ACCOUNT.name, tag: ACCOUNT.tag });
         view.refresh();
       },
+      'open-suggestions': () => ({ showSuggestions: true }),
+      'toggle-suggestions': ({ state }) => ({ showSuggestions: !state.showSuggestions }),
+      'close-suggestions': () => ({ showSuggestions: false }),
+      'pick-suggestion': ({ data, view }) => {
+        draft.name = data.name!;
+        draft.tag = data.tag!;
+        draft.region = data.region!;
+
+        const nameEl = document.getElementById('input-summoner-name') as HTMLInputElement | null;
+        const tagEl = document.getElementById('input-summoner-tag') as HTMLInputElement | null;
+        const regionEl = document.getElementById('input-summoner-region') as HTMLSelectElement | null;
+        if (nameEl) nameEl.value = draft.name;
+        if (tagEl) tagEl.value = draft.tag;
+        if (regionEl) regionEl.value = draft.region;
+
+        view.set({
+          searched: { name: draft.name, tag: draft.tag, region: draft.region },
+          searchQuery: draft.name,
+          showSuggestions: false,
+          selectedMatchId: null,
+          apiNotice: undefined,
+        });
+        void load(view);
+      },
       search: ({ view, event }) => {
         if (event) {
           event.preventDefault();
@@ -414,9 +584,16 @@ export function mountMatchHistory(root: HTMLElement) {
         const tagEl = document.getElementById('input-summoner-tag') as HTMLInputElement | null;
         const regionEl = document.getElementById('input-summoner-region') as HTMLSelectElement | null;
 
-        const gameName = (nameEl?.value ?? draft.name).trim();
-        const tagLine = (tagEl?.value ?? draft.tag).replace(/^#+/, '').trim();
+        const rawName = (nameEl?.value ?? draft.name).trim();
+        let gameName = rawName;
+        let tagLine = (tagEl?.value ?? draft.tag).replace(/^#+/, '').trim();
         const region = regionEl?.value ?? draft.region;
+
+        if (rawName.includes('#')) {
+          const parts = rawName.split('#');
+          gameName = parts[0].trim();
+          tagLine = parts[1].replace(/^#+/, '').trim();
+        }
 
         draft.name = gameName;
         draft.tag = tagLine;
@@ -424,6 +601,8 @@ export function mountMatchHistory(root: HTMLElement) {
 
         view.set({
           searched: { name: gameName, tag: tagLine, region },
+          searchQuery: gameName,
+          showSuggestions: false,
           selectedMatchId: null,
           apiNotice: undefined,
         });
@@ -434,10 +613,30 @@ export function mountMatchHistory(root: HTMLElement) {
       },
     },
     inputs: {
-      name: ({ value }) => void (draft.name = value),
-      tag: ({ value }) => void (draft.tag = value),
+      name: ({ value, view }) => {
+        let name = value;
+        if (value.includes('#')) {
+          const parts = value.split('#');
+          name = parts[0].trim();
+          const tag = parts[1].trim();
+          draft.tag = tag;
+          const tagEl = document.getElementById('input-summoner-tag') as HTMLInputElement | null;
+          if (tagEl) tagEl.value = tag;
+        }
+        draft.name = name;
+        view.set({ showSuggestions: true, searchQuery: value });
+      },
+      tag: ({ value, view }) => {
+        draft.tag = value;
+        view.set({ showSuggestions: true, searchQuery: `${draft.name}#${value}` });
+      },
     },
-    changes: { region: ({ value }) => void (draft.region = value) },
+    changes: {
+      region: ({ value, view }) => {
+        draft.region = value;
+        if (view.state.showSuggestions) view.refresh();
+      },
+    },
     afterRender: (v) => {
       if (v.state.selectedMatchId) {
         const slot = root.querySelector<HTMLElement>('#match-detail-slot');
@@ -453,6 +652,15 @@ export function mountMatchHistory(root: HTMLElement) {
         }
       }
     },
+  });
+
+  // Cerrar el menú PROFILES al hacer clic fuera del buscador
+  document.addEventListener('click', (e) => {
+    if (!view.state.showSuggestions) return;
+    const form = root.querySelector('#form-summoner-search');
+    if (form && !form.contains(e.target as Node)) {
+      view.set({ showSuggestions: false });
+    }
   });
 
   async function load(v: View<State>) {

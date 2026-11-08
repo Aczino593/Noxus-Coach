@@ -29,8 +29,14 @@
 ### 4. Mapa de Visión de la Grieta del Invocador
 - Mapa oficial en alta resolución con spots tácticos de centinelas defensivos, ofensivos y de control en objetivos neutrales (Dragón, Barón, Buffs).
 
-### 5. Simulador de Draft & Modo Clash
-- Análisis de composición de equipo, evaluación de control de masas (CC), curva de daño (Early vs Late) y sinergia grupal.
+### 5. Partida en Vivo & Overlay Táctico In-Game
+- **Detección de Partida en Tiempo Real:** Detección de composiciones 5v5 aliadas y enemigas mediante conexión con el cliente de LoL y simulador de escenarios en 1 clic.
+- **Recomendación Inteligente de Campeón:** Sugerencias basadas en sinergias de equipo, balance de daño y contra-picks específicos de línea.
+- **Camino Compacto de Objetos (Item Path):** Overlay visual ultra-chiquito y secuencial mostrando únicamente los iconos de ítems en orden de compra.
+- **Guía de Habilidad a Subir:** Indicador en tiempo real de qué habilidad priorizar en cada nivel (1-18).
+- **Contadores de Jungla en Vivo:** Cronómetros regresivos automáticos para Buffs, Dragón, Larvas y Barón.
+- **Contadores de Definitivas Aliadas:** Temporizadores en tiempo real de la R de los 4 compañeros de equipo.
+- **Mini-HUD Flotante:** Modo de superposición translúcido sobre el juego.
 
 ---
 
