@@ -19,13 +19,13 @@ export interface Account {
 }
 
 export const ACCOUNT: Account = {
-  name: 'Acz593',
-  tag: 'Acz',
+  name: 'Aczi593',
+  tag: 'Aczi',
   region: 'LAS',
-  level: 143,
-  profileIcon: 4568,
+  level: 116,
+  profileIcon: 743,
   solo: { tier: 'PLATA', division: 'III', lp: 2, wins: 22, losses: 14 },
-  flex: null,
+  flex: { tier: 'PLATA', division: 'I', lp: 82, wins: 32, losses: 18 },
 };
 
 export const REGIONS = [

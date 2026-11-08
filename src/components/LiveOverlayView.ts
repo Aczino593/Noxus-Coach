@@ -1,48 +1,49 @@
 import { createView } from '../lib/view';
-import { esc, roleImg } from '../lib/ui';
-import { champImg, itemImg, mapImg } from '../lib/assets';
+import { esc, roleImg, icon } from '../lib/ui';
+import { champImg, itemImg } from '../lib/assets';
 import { item as itemData } from '../data/items';
 import { itemCost } from '../data/itemGuide';
 import { CHAMPIONS, CHAMP_BY_ID } from '../data/champions';
-import { VISION_SPOTS, type VisionSpot } from '../data/visionSpots';
 import { ROLES, type Role } from '../types';
 import { getChampionBuildPresets, type BuildPreset } from '../lib/buildEngine';
 import { isTauri, setOverlayAlwaysOnTop } from '../lib/tauri';
-import { fetchHudSettings, importBuildToClient, importRunesToClient } from '../lib/lcuClient';
 
 /* ─────────────────────────────────────────────────────────────
- * TIPOS Y ESTADO DEL OVERLAY IN-GAME CONECTADO A LOL (127.0.0.1:2999)
+ * TIPOS Y ESTADO DEL OVERLAY IN-GAME (Réplica Exacta de Itero)
  * ───────────────────────────────────────────────────────────── */
 export type OverlayCorner = 'top-right' | 'bottom-right' | 'top-left' | 'bottom-left';
+export type InGameTab = 'gamedata' | 'scouting';
 
 export interface LivePlayer {
   champId: string;
   name: string;
+  tag?: string;
+  rank?: string;
+  lp?: number;
+  overallWr?: string;
+  champWr?: string;
   role: Role;
   isMe?: boolean;
+  isAlly?: boolean;
+  badges?: { text: string; color: 'green' | 'cyan' | 'red' | 'purple' }[];
   ultCooldown: number;
   ultBaseCooldown: number;
 }
 
-interface WardToastData {
-  spot: VisionSpot;
-  phaseTitle: string;
-  remainingSec: number; // Se oculta solo al llegar a 0
-}
-
 interface State {
-  open: boolean;
-  collapsed: boolean;
-  transparentHudMode: boolean;
+  open: boolean; // Controla la ventana grande de Game Data / Scouting (Atajo: ~ o botón)
+  activeTab: InGameTab; // 'gamedata' (Foto 4) | 'scouting' (Foto 5)
+  showMiniItemWidget: boolean; // Mini-widget en esquina inferior con el próximo ítem
   corner: OverlayCorner;
-  /** Estado de conexión en vivo con League of Legends (127.0.0.1:2999) */
   liveConnected: boolean;
   gameModeLabel: string;
   mySide: 'blue' | 'red';
-  myChampId: string;
-  rivalChampId: string;
+  myChampId: string; // e.g. 'Ashe'
+  rivalChampId: string; // e.g. 'Lucian'
+  rivalSuppId: string; // e.g. 'Thresh'
   role: Role;
   presetIdx: number;
+  buildPage: number; // 1 to 3
   playerLevel: number;
   skillLevels: { Q: number; W: number; E: number; R: number };
   currentGold: number;
@@ -51,14 +52,12 @@ interface State {
   gameTimeSec: number;
   allies: LivePlayer[];
   enemies: LivePlayer[];
-  /** Pequeña pestaña emergente de visión que dura 10 segundos y se cierra sola */
-  wardToast: WardToastData | null;
-  lastTriggeredWardPhase: string;
   detectedGlobalScale: number;
   detectedMinimapScale: number;
   detectedFlipMiniMap: boolean;
   hudScaleManualDelta: number;
   importToast: string | null;
+  transparentHudMode: boolean;
 }
 
 const CORNER_CLASSES: Record<OverlayCorner, string> = {
@@ -68,9 +67,14 @@ const CORNER_CLASSES: Record<OverlayCorner, string> = {
   'bottom-left': 'bottom-4 left-4',
 };
 
-/** Normaliza el nombre de campeón devuelto por Riot Live Client API (`rawChampionName` o `championName`) */
+function formatTime(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
 function resolveChampId(rawOrDisplay: string): string {
-  if (!rawOrDisplay) return 'Ahri';
+  if (!rawOrDisplay) return 'Ashe';
   const cleaned = rawOrDisplay
     .replace(/^game_character_displayname_/i, '')
     .replace(/^PracticeTool_TargetDummy$/i, 'Sion')
@@ -78,16 +82,14 @@ function resolveChampId(rawOrDisplay: string): string {
     .trim();
 
   if (CHAMP_BY_ID[cleaned]) return cleaned;
-
   const lower = cleaned.toLowerCase();
   for (const ch of CHAMPIONS) {
     if (ch.id.toLowerCase() === lower || ch.name.toLowerCase().replace(/\s+/g, '') === lower) {
       return ch.id;
     }
   }
-  // Si el usuario juega un campeón de Data Dragon fuera del subset base, respetamos su ID limpio
   if (/^[A-Za-z]+$/.test(cleaned)) return cleaned;
-  return 'Ahri';
+  return 'Ashe';
 }
 
 function mapRiotPositionToRole(pos: string | undefined, fallbackChampId: string): Role {
@@ -97,779 +99,529 @@ function mapRiotPositionToRole(pos: string | undefined, fallbackChampId: string)
   if (p === 'MIDDLE' || p === 'MID') return 'mid';
   if (p === 'BOTTOM' || p === 'BOT') return 'adc';
   if (p === 'UTILITY' || p === 'SUPPORT') return 'support';
-
   const champ = CHAMP_BY_ID[fallbackChampId];
-  return champ?.roles?.[0] ?? 'mid';
-}
-
-/** Selecciona el spot de visión ideal según el minuto actual de la partida, tu rol y tu lado */
-function pickContextualWardSpot(role: Role, side: 'blue' | 'red', gameTimeSec: number): { spot: VisionSpot; phaseTitle: string } {
-  const roleSpots = VISION_SPOTS.filter((sp) => sp.role === role && sp.side === side);
-  const pool = roleSpots.length > 0 ? roleSpots : VISION_SPOTS.filter((sp) => sp.role === 'mid' && sp.side === side);
-
-  if (gameTimeSec < 130) {
-    // Min 00:00 - 02:10: Ward inicial de salida / Pixel Bush o Raptors
-    const early = pool.find((s) => s.phase === 'early' && s.type === 'trinket') || pool[0];
-    return { spot: early, phaseTitle: '01:15 · Ward Inicial Antirrotación' };
-  }
-  if (gameTimeSec < 220) {
-    // Min 02:10 - 03:40: Ventana del primer Gank Nv. 3 / Escurridizo
-    const gank = pool.filter((s) => s.phase === 'early')[1] || pool[0];
-    return { spot: gank, phaseTitle: '02:30 · Alerta de Primer Gank (Nv. 3)' };
-  }
-  if (gameTimeSec < 540) {
-    // Min 03:40 - 09:00: Pink Ward defensivo / Control de primer objetivo
-    const pink = pool.find((s) => s.type === 'control') || pool[2] || pool[0];
-    return { spot: pink, phaseTitle: '04:30+ · Coloca tu Pink Ward (75g)' };
-  }
-  // Mid / Late Game: Control de Objetivos y Jungla Profunda
-  const midLate = pool.find((s) => s.phase === 'midgame' || s.phase === 'objective') || pool[pool.length - 1];
-  return { spot: midLate, phaseTitle: 'Control de Río y Objetivos' };
-}
-
-export function mountLiveOverlayView(root: HTMLElement, onOpenChange?: (open: boolean) => void) {
-  let pipWindow: Window | null = null;
-
-  const view = createView<State>({
-    root,
-    state: {
-      open: false,
-      collapsed: false,
-      transparentHudMode: false,
-      corner: 'top-right',
-      liveConnected: false,
-      gameModeLabel: 'Modo Demo (Abre LoL para detectar en vivo)',
-      mySide: 'blue',
-      myChampId: 'Ahri',
-      rivalChampId: 'Sylas',
-      role: 'mid',
-      presetIdx: 0,
-      playerLevel: 3,
-      skillLevels: { Q: 2, W: 1, E: 0, R: 0 },
-      currentGold: 650,
-      ownedItemIds: [1056, 2003],
-      manualItemStep: 1,
-      gameTimeSec: 145,
-      allies: [
-        { champId: 'Ornn', name: 'Top', role: 'top', ultCooldown: 0, ultBaseCooldown: 90 },
-        { champId: 'Viego', name: 'Jungla', role: 'jungle', ultCooldown: 0, ultBaseCooldown: 70 },
-        { champId: 'Ahri', name: 'Tú', role: 'mid', isMe: true, ultCooldown: 0, ultBaseCooldown: 80 },
-        { champId: 'Jinx', name: 'ADC', role: 'adc', ultCooldown: 0, ultBaseCooldown: 70 },
-        { champId: 'Lulu', name: 'Support', role: 'support', ultCooldown: 0, ultBaseCooldown: 80 },
-      ],
-      enemies: [
-        { champId: 'Aatrox', name: 'Top Rival', role: 'top', ultCooldown: 0, ultBaseCooldown: 80 },
-        { champId: 'LeeSin', name: 'Jg Rival', role: 'jungle', ultCooldown: 0, ultBaseCooldown: 60 },
-        { champId: 'Sylas', name: 'Mid Rival', role: 'mid', ultCooldown: 0, ultBaseCooldown: 60 },
-        { champId: 'Draven', name: 'ADC Rival', role: 'adc', ultCooldown: 0, ultBaseCooldown: 75 },
-        { champId: 'Thresh', name: 'Sup Rival', role: 'support', ultCooldown: 0, ultBaseCooldown: 80 },
-      ],
-      wardToast: null,
-      lastTriggeredWardPhase: '',
-      detectedGlobalScale: 1.0,
-      detectedMinimapScale: 1.0,
-      detectedFlipMiniMap: false,
-      hudScaleManualDelta: 0,
-      importToast: null,
-    },
-    render: (s) => {
-      if (!s.open) return '';
-
-      const presets = getChampionBuildPresets(s.myChampId, s.rivalChampId, s.role);
-      const activePreset = presets[s.presetIdx] || presets[0];
-      const posClass = CORNER_CLASSES[s.corner];
-
-      if (s.collapsed) {
-        const currentSkill = activePreset.abilityOrder.levels[s.playerLevel - 1] || 'Q';
-        return `
-        <aside class="fixed ${posClass} z-50 flex items-center gap-2.5 rounded-full border border-crimson/70 bg-canvas/95 px-3.5 py-2 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.9)]">
-          <span class="relative flex h-2.5 w-2.5">
-            <span class="absolute inset-0 rounded-full ${s.liveConnected ? 'bg-win' : 'bg-gold'} opacity-75 animate-ping"></span>
-            <span class="relative h-2.5 w-2.5 rounded-full ${s.liveConnected ? 'bg-win' : 'bg-gold'}"></span>
-          </span>
-          <img src="${champImg(s.myChampId)}" class="h-6 w-6 rounded-full border border-gold object-cover" alt="" />
-          <span class="text-[11.5px] font-extrabold text-ink">Nv.${s.playerLevel} <b class="text-gold">+${currentSkill}</b></span>
-          <span class="num font-mono text-[11px] text-ink-dim">${formatTime(s.gameTimeSec)}</span>
-          <button class="btn btn-sm !h-6 !px-2 !text-[10px]" data-action="toggle-collapse">Expandir</button>
-          <button class="text-ink-mute hover:text-ink text-[12px] px-1" data-action="close-overlay" title="Cerrar Overlay (Alt+O)">✕</button>
-        </aside>
-        ${renderBottomAbilityHudBar(s, activePreset)}
-        ${s.wardToast ? renderTemporaryWardToast(s.wardToast, s.detectedFlipMiniMap) : ''}`;
-      }
-
-      return `
-      <!-- 1. PANEL COMPACTO DE OBJETOS Y MATCHUP (ESQUINA) -->
-      <aside class="fixed ${posClass} z-50 w-[355px] max-w-[calc(100vw-2rem)] rounded-2xl border border-line-strong bg-[#0a0b0f]/95 backdrop-blur-xl shadow-[0_14px_48px_rgba(0,0,0,0.92)] text-ink overflow-hidden select-none">
-        <!-- Cabecera de Estado en Vivo -->
-        <div class="flex items-center justify-between gap-2 border-b border-line bg-surface/95 px-3 py-2">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="relative flex h-2.5 w-2.5 flex-none">
-              <span class="absolute inset-0 rounded-full ${s.liveConnected ? 'bg-win' : 'bg-gold'} opacity-75 animate-ping"></span>
-              <span class="relative h-2.5 w-2.5 rounded-full ${s.liveConnected ? 'bg-win' : 'bg-gold'}"></span>
-            </span>
-            <span class="text-[10.5px] font-black tracking-wider truncate ${s.liveConnected ? 'text-win' : 'text-ink'}">
-              ${s.liveConnected ? 'LOL CONECTADO EN VIVO' : 'NOXUS OVERLAY'}
-            </span>
-            <span class="chip chip-gold !py-0 !px-1.5 !text-[9.5px] num font-mono flex-none">${formatTime(s.gameTimeSec)}</span>
-          </div>
-
-          <!-- Esquinas y Controles -->
-          <div class="flex items-center gap-1 flex-none">
-            <div class="flex items-center rounded-md border border-line bg-canvas/80 p-0.5 mr-0.5" title="Cambiar esquina">
-              <button class="px-1 py-0.5 text-[9px] rounded ${s.corner === 'top-left' ? 'bg-crimson text-white font-bold' : 'text-ink-mute hover:text-ink'}" data-action="set-corner" data-id="top-left">↖</button>
-              <button class="px-1 py-0.5 text-[9px] rounded ${s.corner === 'top-right' ? 'bg-crimson text-white font-bold' : 'text-ink-mute hover:text-ink'}" data-action="set-corner" data-id="top-right">↗</button>
-              <button class="px-1 py-0.5 text-[9px] rounded ${s.corner === 'bottom-left' ? 'bg-crimson text-white font-bold' : 'text-ink-mute hover:text-ink'}" data-action="set-corner" data-id="bottom-left">↙</button>
-              <button class="px-1 py-0.5 text-[9px] rounded ${s.corner === 'bottom-right' ? 'bg-crimson text-white font-bold' : 'text-ink-mute hover:text-ink'}" data-action="set-corner" data-id="bottom-right">↘</button>
-            </div>
-            <button class="flex h-5 w-5 items-center justify-center rounded text-ink-mute hover:bg-surface-2 hover:text-ink text-[11px]" data-action="toggle-collapse" title="Minimizar">—</button>
-            <button class="flex h-5 w-5 items-center justify-center rounded text-ink-mute hover:bg-crimson/20 hover:text-crimson text-[11px]" data-action="close-overlay" title="Cerrar (Alt+O)">✕</button>
-          </div>
-        </div>
-
-        <div class="p-3 space-y-2.5">
-          <!-- Barra de Superposición sobre LoL + Disparador de Pestaña de Ward -->
-          <div class="flex items-center justify-between gap-1.5">
-            ${
-              isTauri()
-                ? `<button type="button" class="flex-1 rounded-lg border px-2 py-1 text-[10px] font-bold transition-all ${
-                    s.transparentHudMode
-                      ? 'border-win bg-win/20 text-win'
-                      : 'border-line bg-canvas/80 text-ink-dim hover:text-ink'
-                  }" data-action="toggle-transparent-hud" title="Hace transparente el fondo de la app y la mantiene siempre encima del LoL">
-                    ${s.transparentHudMode ? '🟢 Fondo Transparente Activo' : '🪟 Superponer sobre LoL'}
-                  </button>`
-                : `<button type="button" class="flex-1 rounded-lg border border-gold/40 bg-gold/10 hover:bg-gold/20 px-2 py-1 text-[10px] font-bold text-gold transition-all" data-action="open-pip-overlay" title="Abre una mini-ventana Siempre Visible que flota encima del League of Legends (Modo Ventana Sin Bordes)">
-                    📌 Flotar encima del LoL
-                  </button>`
-            }
-            <button type="button" class="rounded-lg border border-crimson/50 bg-crimson/15 hover:bg-crimson/25 px-2.5 py-1 text-[10px] font-bold text-crimson transition-all flex items-center gap-1" data-action="trigger-ward-toast" title="Muestra por 10 segundos la pestaña de dónde wardear en tu línea">
-              <span>👁 Dónde Wardear (10s)</span>
-            </button>
-          </div>
-
-          <!-- DETECCIÓN DE CAMPEÓN PROPIO Y RIVAL + LÍNEA -->
-          ${renderDetectedMatchupCard(s)}
-
-          <!-- CAMINO DE OBJETOS CHICO (SOLO ICONOS ENCADENADOS) -->
-          ${renderCompactItemPathWidget(s, activePreset, presets)}
-        </div>
-      </aside>
-
-      <!-- 2. INDICADOR CENTRAL ARRIBA DE LAS HABILIDADES DEL LOL (Q / W / E / R) -->
-      ${renderBottomAbilityHudBar(s, activePreset)}
-
-      <!-- 3. PEQUEÑA PESTAÑA TEMPORAL (10s) QUE INDICA DÓNDE WARDEAR Y DESAPARECE SOLA -->
-      ${s.wardToast ? renderTemporaryWardToast(s.wardToast, s.detectedFlipMiniMap) : ''}`;
-    },
-    actions: {
-      'set-corner': ({ data }) => ({ corner: data.id as OverlayCorner }),
-      'toggle-collapse': ({ state }) => ({ collapsed: !state.collapsed }),
-      'close-overlay': () => {
-        applyTransparentBackground(false);
-        setOverlayAlwaysOnTop(false);
-        onOpenChange?.(false);
-        return { open: false, transparentHudMode: false };
-      },
-      'toggle-transparent-hud': ({ state }) => {
-        const next = !state.transparentHudMode;
-        applyTransparentBackground(next);
-        setOverlayAlwaysOnTop(next);
-        return { transparentHudMode: next };
-      },
-      'open-pip-overlay': () => {
-        openAlwaysOnTopPiPWindow();
-      },
-      role: ({ data, state }) => {
-        const nextRole = data.id as Role;
-        const { spot, phaseTitle } = pickContextualWardSpot(nextRole, state.mySide, state.gameTimeSec);
-        return {
-          role: nextRole,
-          presetIdx: 0,
-          wardToast: { spot, phaseTitle, remainingSec: 10 },
-        };
-      },
-      preset: ({ data }) => ({ presetIdx: Number(data.idx) || 0 }),
-      'level-up': ({ state }) => ({ playerLevel: Math.min(18, state.playerLevel + 1) }),
-      'level-down': ({ state }) => ({ playerLevel: Math.max(1, state.playerLevel - 1) }),
-      'select-item-step': ({ data }) => ({ manualItemStep: Number(data.idx) || 0 }),
-      'trigger-ward-toast': ({ state }) => {
-        const { spot, phaseTitle } = pickContextualWardSpot(state.role, state.mySide, state.gameTimeSec);
-        return {
-          wardToast: {
-            spot,
-            phaseTitle,
-            remainingSec: 10,
-          },
-        };
-      },
-      'dismiss-ward-toast': () => ({ wardToast: null }),
-      'hud-scale-down': ({ state }) => ({
-        hudScaleManualDelta: Math.max(-0.6, state.hudScaleManualDelta - 0.05),
-      }),
-      'hud-scale-up': ({ state }) => ({
-        hudScaleManualDelta: Math.min(0.6, state.hudScaleManualDelta + 0.05),
-      }),
-      'quick-import-lol': async ({ state, view: v }) => {
-        const presets = getChampionBuildPresets(state.myChampId, state.rivalChampId, state.role);
-        const activePreset = presets[state.presetIdx] || presets[0];
-
-        v.set({ importToast: 'Importando...' });
-        try {
-          const bRes = await importBuildToClient(state.myChampId, activePreset);
-          const rRes = await importRunesToClient(activePreset.runes, state.myChampId, activePreset.label);
-          const msg =
-            rRes.success && bRes.success
-              ? '✓ Runas y Build en LoL'
-              : bRes.success
-                ? '✓ Build en Tienda LoL'
-                : rRes.message || bRes.message;
-          v.set({ importToast: msg });
-          setTimeout(() => {
-            if (v.state.importToast === msg) v.set({ importToast: null });
-          }, 5000);
-        } catch {
-          v.set({ importToast: 'Error al importar' });
-        }
-        return {};
-      },
-    },
-    changes: {
-      'my-champ': ({ value, view: v }) => {
-        const role = mapRiotPositionToRole('', value);
-        v.set({ myChampId: value, role, presetIdx: 0 });
-      },
-      'rival-champ': ({ value, view: v }) => {
-        v.set({ rivalChampId: value, presetIdx: 0 });
-      },
-    },
-  });
-
-  /** Abre una mini-ventana Always-On-Top real usando Document Picture-in-Picture (Chrome/Edge) */
-  async function openAlwaysOnTopPiPWindow() {
-    const anyWin = window as any;
-    if (!anyWin.documentPictureInPicture) {
-      alert(
-        'Para superponer en pantalla completa usa Chrome/Edge o ejecuta la app con Tauri. Asegúrate de que League of Legends esté en modo "Sin Bordes" (Borderless).',
-      );
-      return;
-    }
-    try {
-      pipWindow = await anyWin.documentPictureInPicture.requestWindow({
-        width: 380,
-        height: 360,
-      });
-      if (!pipWindow) return;
-      // Copiar hojas de estilo al mini-HUD flotante Always-On-Top
-      document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
-        pipWindow!.document.head.appendChild(node.cloneNode(true));
-      });
-      pipWindow.document.body.style.background = '#08090c';
-      pipWindow.document.body.style.color = '#f3ece2';
-      pipWindow.document.body.style.margin = '0';
-      pipWindow.document.body.style.padding = '10px';
-      pipWindow.document.body.style.fontFamily = 'Inter, sans-serif';
-      renderPiPContent();
-
-      pipWindow.addEventListener('pagehide', () => {
-        pipWindow = null;
-      });
-    } catch {
-      // Usuario canceló PiP
-    }
-  }
-
-  function renderPiPContent() {
-    if (!pipWindow || pipWindow.closed) return;
-    const s = view.state;
-    const presets = getChampionBuildPresets(s.myChampId, s.rivalChampId, s.role);
-    const activePreset = presets[s.presetIdx] || presets[0];
-    const currentSkill = activePreset.abilityOrder.levels[s.playerLevel - 1] || 'Q';
-    const { spot, phaseTitle } = pickContextualWardSpot(s.role, s.mySide, s.gameTimeSec);
-
-    pipWindow.document.body.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:10px;user-select:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #262936;padding-bottom:6px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="width:8px;height:8px;border-radius:999px;background:${s.liveConnected ? '#2dc98a' : '#f0b429'};display:inline-block;"></span>
-            <strong style="font-size:11px;letter-spacing:0.05em;">${s.liveConnected ? 'LOL EN VIVO DETECTADO' : 'NOXUS MINI-HUD'}</strong>
-          </div>
-          <span style="font-family:monospace;font-size:11px;color:#f0b429;font-weight:800;">${formatTime(s.gameTimeSec)} · Nv.${s.playerLevel} (${s.currentGold}g)</span>
-        </div>
-
-        <!-- Habilidad a subir ahora mismo -->
-        <div style="background:#12141c;border:1px solid #f0b42988;border-radius:10px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <img src="${champImg(s.myChampId)}" style="width:28px;height:28px;border-radius:999px;border:1.5px solid #f0b429;" />
-            <div>
-              <div style="font-size:10px;color:#9ca3af;">SUBIR EN NIVEL ${s.playerLevel}</div>
-              <div style="font-size:14px;font-weight:900;color:#f0b429;">▲ SUBIR TECLA [ ${currentSkill} ]</div>
-            </div>
-          </div>
-          <div style="font-size:10px;color:#d1d5db;font-weight:700;">Max: ${esc(activePreset.abilityOrder.priorityStr)}</div>
-        </div>
-
-        <!-- Camino de Objetos (Solo iconos) -->
-        <div style="background:#12141c;border:1px solid #262936;border-radius:10px;padding:8px 10px;">
-          <div style="font-size:10px;color:#9ca3af;font-weight:800;margin-bottom:6px;text-transform:uppercase;">
-            Camino de Objetos (${esc(s.myChampId)} vs ${esc(s.rivalChampId)})
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
-            ${getOrderedBuildItems(activePreset)
-              .map((id, idx) => {
-                const owned = s.ownedItemIds.includes(id);
-                return `<div style="position:relative;">
-                  <img src="${itemImg(id)}" style="width:34px;height:34px;border-radius:6px;border:${
-                    owned ? '2px solid #2dc98a' : idx === s.manualItemStep ? '2px solid #f0b429' : '1px solid #333'
-                  };opacity:${owned ? '0.55' : '1'};" title="${esc(itemData(id).name)} (${itemCost(id)}g)" />
-                  ${owned ? '<span style="position:absolute;top:-4px;right:-4px;background:#2dc98a;color:#000;font-size:9px;font-weight:900;border-radius:999px;padding:0 3px;">✓</span>' : ''}
-                </div>`;
-              })
-              .join('<span style="color:#6b7280;font-size:10px;">➔</span>')}
-          </div>
-        </div>
-
-        <!-- Consejo de Ward actual -->
-        <div style="background:#12141c;border:1px solid #ff2e4d66;border-radius:10px;padding:8px 10px;">
-          <div style="font-size:10px;color:#ff2e4d;font-weight:800;text-transform:uppercase;">👁 ${esc(phaseTitle)}</div>
-          <div style="font-size:11.5px;font-weight:800;color:#f3ece2;margin-top:2px;">Wardear: ${esc(spot.title)}</div>
-          <div style="font-size:10px;color:#9ca3af;margin-top:2px;">${esc(spot.tacticalAdvice)}</div>
-        </div>
-      </div>
-    `;
-  }
-
-  /**
-   * SONDEO EN TIEMPO REAL DE LEAGUE OF LEGENDS (`https://127.0.0.1:2999/liveclientdata/allgamedata` vía `/lol-live`)
-   * Funciona automáticamente al entrar a una Partida de Entrenamiento o Partida Normal/Clasificatoria.
-   */
-  async function pollLiveLeagueClient() {
-    try {
-      const resp = await fetch('/lol-live', { cache: 'no-store' });
-      if (!resp.ok) return;
-      const payload = await resp.json();
-
-      if (!payload?.connected || !payload?.data) {
-        if (view.state.liveConnected) {
-          view.set({
-            liveConnected: false,
-            gameModeLabel: 'Modo Demo (Abre una partida en LoL para detectar en vivo)',
-          });
-        }
-        return;
-      }
-
-      const d = payload.data;
-      const activePlayer = d.activePlayer ?? {};
-      const allPlayers: any[] = Array.isArray(d.allPlayers) ? d.allPlayers : [];
-      const gameData = d.gameData ?? {};
-
-      // Identificar al jugador activo en `allPlayers`
-      const activeName = (activePlayer.riotIdGameName || activePlayer.summonerName || '').toLowerCase();
-      const meEntry =
-        allPlayers.find((p) => {
-          const pName = (p.riotIdGameName || p.summonerName || '').toLowerCase();
-          return activeName && pName && (pName === activeName || activeName.includes(pName));
-        }) || allPlayers[0];
-
-      const myChampId = resolveChampId(meEntry?.rawChampionName || meEntry?.championName || 'Ahri');
-      const myTeam = meEntry?.team === 'CHAOS' ? 'CHAOS' : 'ORDER';
-      const mySide: 'blue' | 'red' = myTeam === 'CHAOS' ? 'red' : 'blue';
-      const detectedRole = mapRiotPositionToRole(meEntry?.position, myChampId);
-
-      // Objetos comprados actualmente en el inventario del jugador en LoL
-      const ownedItemIds: number[] = Array.isArray(meEntry?.items)
-        ? meEntry.items.map((it: any) => Number(it.itemID)).filter((n: number) => n > 0)
-        : [];
-
-      // Niveles reales de habilidades Q, W, E, R desde el cliente de LoL
-      const ab = activePlayer.abilities ?? {};
-      const skillLevels = {
-        Q: Number(ab.Q?.abilityLevel ?? 0),
-        W: Number(ab.W?.abilityLevel ?? 0),
-        E: Number(ab.E?.abilityLevel ?? 0),
-        R: Number(ab.R?.abilityLevel ?? 0),
-      };
-
-      const playerLevel = Math.max(1, Math.min(18, Number(activePlayer.level || meEntry?.level || 1)));
-      const currentGold = Math.floor(Number(activePlayer.currentGold ?? 0));
-      const gameTimeSec = Math.floor(Number(gameData.gameTime ?? 0));
-
-      // Detectar campeones enemigos en la partida (filtrando muñecos de práctica si hay bots reales)
-      const rawEnemies = allPlayers.filter((p) => p.team && p.team !== myTeam);
-      const realEnemies = rawEnemies.filter((p) => !String(p.rawChampionName || '').includes('TargetDummy'));
-      const enemyList = (realEnemies.length > 0 ? realEnemies : rawEnemies).map((p, idx) => {
-        const cId = resolveChampId(p.rawChampionName || p.championName);
-        return {
-          champId: cId,
-          name: p.riotIdGameName || p.summonerName || cId,
-          role: mapRiotPositionToRole(p.position, cId) || ROLES[idx % 5],
-          ultCooldown: 0,
-          ultBaseCooldown: 75,
-        };
-      });
-
-      const rivalInMyLane =
-        enemyList.find((e) => e.role === detectedRole)?.champId ||
-        enemyList[0]?.champId ||
-        view.state.rivalChampId;
-
-      // Calcular el siguiente ítem del camino según los ítems que ya compraste en la tienda del LoL
-      const presets = getChampionBuildPresets(myChampId, rivalInMyLane, detectedRole);
-      const activePreset = presets[view.state.presetIdx] || presets[0];
-      const buildSteps = getOrderedBuildItems(activePreset);
-      const firstUnownedIdx = buildSteps.findIndex((itemId) => !ownedItemIds.includes(itemId));
-      const nextStepIdx = firstUnownedIdx === -1 ? buildSteps.length - 1 : firstUnownedIdx;
-
-      // Disparar automáticamente la pequeña pestaña de "Dónde Wardear" (10s) al entrar a partida o en ventanas clave
-      let nextToast = view.state.wardToast;
-      let nextPhaseKey = view.state.lastTriggeredWardPhase;
-
-      const phaseTrigger =
-        !view.state.liveConnected
-          ? 'connect'
-          : gameTimeSec >= 70 && gameTimeSec <= 85
-            ? 'early-0115'
-            : gameTimeSec >= 140 && gameTimeSec <= 155
-              ? 'gank-0225'
-              : gameTimeSec >= 270 && gameTimeSec <= 285
-                ? 'pink-0430'
-                : '';
-
-      if (phaseTrigger && phaseTrigger !== view.state.lastTriggeredWardPhase) {
-        const { spot, phaseTitle } = pickContextualWardSpot(detectedRole, mySide, gameTimeSec);
-        nextToast = { spot, phaseTitle, remainingSec: 10 };
-        nextPhaseKey = phaseTrigger;
-      }
-
-      // Si es la primera vez que detecta la partida en vivo, abrimos el Overlay automáticamente
-      const shouldAutoOpen = !view.state.liveConnected ? true : view.state.open;
-      if (!view.state.liveConnected && shouldAutoOpen) {
-        onOpenChange?.(true);
-      }
-
-      view.set({
-        open: shouldAutoOpen,
-        liveConnected: true,
-        gameModeLabel: gameData.gameMode === 'PRACTICETOOL' ? 'Partida de Entrenamiento' : 'Partida en Vivo',
-        mySide,
-        myChampId,
-        rivalChampId: rivalInMyLane,
-        role: view.state.liveConnected ? view.state.role : detectedRole,
-        playerLevel,
-        skillLevels,
-        currentGold,
-        ownedItemIds,
-        manualItemStep: nextStepIdx,
-        gameTimeSec,
-        enemies: enemyList.length > 0 ? enemyList : view.state.enemies,
-        wardToast: nextToast,
-        lastTriggeredWardPhase: nextPhaseKey,
-      });
-
-      renderPiPContent();
-    } catch {
-      // Silencioso si el servidor no responde
-    }
-  }
-
-  // Sondeo continuo cada 1.2 segundos para detectar League of Legends al instante
-  window.setInterval(pollLiveLeagueClient, 1200);
-  pollLiveLeagueClient();
-
-  // Detección de escala del HUD y minimapa (GlobalScale, FlipMiniMap) desde la configuración de LoL
-  const checkHud = () => {
-    fetchHudSettings().then((hud) => {
-      if (hud.connected) {
-        view.set({
-          detectedGlobalScale: hud.globalScale,
-          detectedMinimapScale: hud.minimapScale,
-          detectedFlipMiniMap: hud.flipMiniMap,
-        });
-      }
-    });
-  };
-  checkHud();
-
-  let hudCheckCount = 0;
-
-  // Reloj de 1 segundo para descontar el Toast temporal de Visión (10s -> 0s y desaparece)
-  window.setInterval(() => {
-    const s = view.state;
-    if (!s.open) return;
-
-    hudCheckCount++;
-    if (hudCheckCount % 8 === 0) {
-      checkHud();
-    }
-
-    let nextToast = s.wardToast;
-    if (nextToast) {
-      if (nextToast.remainingSec <= 1) {
-        nextToast = null;
-      } else {
-        nextToast = { ...nextToast, remainingSec: nextToast.remainingSec - 1 };
-      }
-    }
-
-    if (!s.liveConnected) {
-      view.set({
-        gameTimeSec: s.gameTimeSec + 1,
-        wardToast: nextToast,
-      });
-    } else if (nextToast !== s.wardToast) {
-      view.set({ wardToast: nextToast });
-    }
-    renderPiPContent();
-  }, 1000);
-
-  return {
-    toggle: () => {
-      const next = !view.state.open;
-      if (next && !view.state.wardToast) {
-        const { spot, phaseTitle } = pickContextualWardSpot(
-          view.state.role,
-          view.state.mySide,
-          view.state.gameTimeSec,
-        );
-        view.set({
-          open: true,
-          collapsed: false,
-          wardToast: { spot, phaseTitle, remainingSec: 10 },
-        });
-      } else {
-        if (!next) {
-          applyTransparentBackground(false);
-          setOverlayAlwaysOnTop(false);
-        }
-        view.set({ open: next, collapsed: false, transparentHudMode: false });
-      }
-      onOpenChange?.(next);
-      return next;
-    },
-    setOpen: (open: boolean) => {
-      if (!open) {
-        applyTransparentBackground(false);
-        setOverlayAlwaysOnTop(false);
-      }
-      view.set({ open });
-      onOpenChange?.(open);
-    },
-    isOpen: () => view.state.open,
-  };
-}
-
-function applyTransparentBackground(transparent: boolean) {
-  if (transparent) {
-    document.documentElement.style.background = 'transparent';
-    document.body.style.background = 'transparent';
-    const mainEl = document.querySelector('#view-host') as HTMLElement | null;
-    if (mainEl) mainEl.style.opacity = '0.08';
-  } else {
-    document.documentElement.style.background = '';
-    document.body.style.background = '';
-    const mainEl = document.querySelector('#view-host') as HTMLElement | null;
-    if (mainEl) mainEl.style.opacity = '1';
-  }
-}
-
-/* ─────────────────────────────────────────────────────────────
- * SUB-COMPONENTES FUNDAMENTALES DEL OVERLAY
- * ───────────────────────────────────────────────────────────── */
-
-function formatTime(totalSec: number): string {
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `${m}:${s < 10 ? '0' : ''}${s}`;
+  return champ?.roles?.[0] ?? 'adc';
 }
 
 function getOrderedBuildItems(b: BuildPreset): number[] {
   const raw = [
-    b.starterItems[0]?.item || 1056,
-    b.earlyItems[0]?.item || 3802,
-    b.coreItems[1]?.item || 3020,
-    b.fullBuild[0] || 3118,
-    b.fullBuild[2] || 4645,
-    b.fullBuild[3] || 3157,
-    b.fullBuild[4] || 3089,
+    b.starterItems[0]?.item || 1055,
+    b.earlyItems[0]?.item || 3006,
+    b.coreItems[0]?.item || 3153,
+    b.coreItems[1]?.item || 3085,
+    b.fullBuild[0] || 3031,
+    b.fullBuild[1] || 3036,
   ];
-  // Evitar cualquier ítem duplicado en el camino
   return Array.from(new Set(raw));
 }
 
-/** Tarjeta compacta con el Campeón Detectado + Enemigo y selector rápido para modo entrenamiento */
-function renderDetectedMatchupCard(s: State): string {
-  const allChamps = CHAMPIONS.slice().sort((a, b) => a.name.localeCompare(b.name));
-
+/* ─────────────────────────────────────────────────────────────
+ * SUB-COMPONENTE: VENTANA COMPLETA IN-GAME (Fotos 4 y 5 de Itero)
+ * ───────────────────────────────────────────────────────────── */
+function renderFullInGameModal(s: State, activePreset: BuildPreset): string {
   return `
-  <div class="rounded-xl border border-line bg-surface/75 p-2.5 space-y-2">
-    <div class="flex items-center justify-between gap-1.5">
-      <span class="text-[10px] font-bold text-ink-dim truncate">${esc(s.gameModeLabel)}</span>
-      <div class="flex items-center gap-1.5">
-        ${
-          s.importToast
-            ? `<span class="chip chip-win !py-0 !px-1.5 text-[9px] font-bold animate-fade-in">${esc(s.importToast)}</span>`
-            : `<button class="btn btn-sm btn-light !h-5 !px-2 !text-[9.5px] font-bold flex items-center gap-1 shadow-sm" data-action="quick-import-lol" title="Equipa las runas y exporta la build a la tienda del LoL">
-                 <span>⚡ Importar a LoL</span>
-               </button>`
-        }
-      </div>
-    </div>
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md select-none anim-fade-up">
+    <div class="relative w-[1140px] max-w-full rounded-2xl border border-line-strong bg-[#090b10]/95 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.95)] overflow-hidden flex flex-col max-h-[90vh]">
 
-    <!-- Selección de Línea -->
-    <div class="flex items-center justify-between gap-1 pt-1 border-t border-line/50">
-      <span class="text-[9.5px] font-bold uppercase text-ink-mute">Línea de Juego:</span>
-      <div class="flex items-center gap-0.5">
-        ${ROLES.map(
-          (r) => `
-          <button class="p-1 rounded border transition-all ${
-            s.role === r ? 'border-crimson bg-crimson/20' : 'border-transparent opacity-60 hover:opacity-100'
-          }" data-action="role" data-id="${r}" title="Línea: ${r.toUpperCase()}">
-            <img src="${roleImg(r)}" class="w-3.5 h-3.5" alt="${r}" />
-          </button>`,
-        ).join('')}
-      </div>
-    </div>
-
-    <!-- Tu Campeón vs Campeón Rival (Auto-detectado en partida o seleccionable en Práctica) -->
-    <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg bg-canvas/85 p-2 border border-line/80">
-      <div class="flex items-center gap-2 min-w-0">
-        <img src="${champImg(s.myChampId)}" class="w-8 h-8 rounded-full border-2 border-win object-cover flex-none" alt="" />
-        <div class="min-w-0 flex-1">
-          <div class="text-[9px] font-bold uppercase text-win">Tu Campeón</div>
-          <select class="w-full bg-transparent text-[11.5px] font-extrabold text-ink focus:outline-none truncate cursor-pointer" data-change="my-champ">
-            ${allChamps.map((c) => `<option value="${c.id}" class="bg-canvas text-ink" ${c.id === s.myChampId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
-            ${!CHAMP_BY_ID[s.myChampId] ? `<option value="${esc(s.myChampId)}" class="bg-canvas text-ink" selected>${esc(s.myChampId)}</option>` : ''}
-          </select>
+      <!-- Barra Superior de Navegación del Overlay (Fotos 4 y 5) -->
+      <header class="flex items-center justify-between border-b border-line bg-surface/90 px-4 py-2.5 flex-none">
+        <!-- Izquierda: Botón Mostrar/Ocultar -->
+        <div class="flex items-center gap-3">
+          <button class="flex items-center gap-1.5 rounded-lg border border-line bg-canvas/80 px-2.5 py-1 text-[11px] font-bold text-ink hover:border-gold transition-all" data-action="toggle-overlay" title="Atajo de teclado: ~">
+            ${icon('eye', 13)} Mostrar/Ocultar (~)
+          </button>
         </div>
-      </div>
 
-      <span class="text-[10px] font-black text-crimson px-1">VS</span>
-
-      <div class="flex items-center gap-2 min-w-0">
-        <img src="${champImg(s.rivalChampId)}" class="w-8 h-8 rounded-full border-2 border-crimson object-cover flex-none" alt="" />
-        <div class="min-w-0 flex-1">
-          <div class="text-[9px] font-bold uppercase text-crimson">Rival Línea</div>
-          <select class="w-full bg-transparent text-[11.5px] font-extrabold text-ink focus:outline-none truncate cursor-pointer" data-change="rival-champ">
-            ${allChamps.map((c) => `<option value="${c.id}" class="bg-canvas text-ink" ${c.id === s.rivalChampId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}
-            ${!CHAMP_BY_ID[s.rivalChampId] ? `<option value="${esc(s.rivalChampId)}" class="bg-canvas text-ink" selected>${esc(s.rivalChampId)}</option>` : ''}
-          </select>
+        <!-- Centro: Selector de Pestañas (Player Scouting vs Game Data) -->
+        <div class="flex items-center rounded-xl border border-line bg-canvas p-1">
+          <button class="px-5 py-1.5 rounded-lg text-[12.5px] font-black uppercase tracking-wider transition-all ${
+            s.activeTab === 'scouting' ? 'border border-[#2dd4bf]/70 bg-[#2dd4bf]/20 text-[#2dd4bf] shadow-sm' : 'text-ink-dim hover:text-ink'
+          }" data-action="set-tab" data-id="scouting">
+            Player Scouting
+          </button>
+          <button class="px-5 py-1.5 rounded-lg text-[12.5px] font-black uppercase tracking-wider transition-all ${
+            s.activeTab === 'gamedata' ? 'border border-[#2dd4bf]/70 bg-[#2dd4bf]/20 text-[#2dd4bf] shadow-sm' : 'text-ink-dim hover:text-ink'
+          }" data-action="set-tab" data-id="gamedata">
+            Game Data
+          </button>
         </div>
-      </div>
-    </div>
 
-    <!-- Retratos de los enemigos detectados en la partida -->
-    <div class="flex items-center justify-between text-[10px] text-ink-dim px-0.5">
-      <div class="flex items-center gap-1.5">
-        <span class="text-[9.5px] font-bold text-ink-mute">Enemigos:</span>
-        <div class="flex -space-x-1">
-          ${s.enemies
-            .slice(0, 5)
-            .map(
-              (e) =>
-                `<img src="${champImg(e.champId)}" class="w-5 h-5 rounded-full border ${
-                  e.champId === s.rivalChampId ? 'border-crimson scale-110 z-10' : 'border-line opacity-80'
-                }" title="Enemigo detectado: ${esc(e.champId)}" alt="" />`,
-            )
-            .join('')}
+        <!-- Derecha: Atajo Alt+O y Botón Cerrar -->
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-mono text-ink-mute hidden sm:inline">Alternar entre pestañas (Alt + O)</span>
+          <button class="grid h-7 w-7 place-items-center rounded-lg border border-line bg-canvas/60 text-ink-mute hover:bg-crimson/20 hover:text-crimson transition-colors" data-action="toggle-overlay" title="Cerrar modal (~)">
+            ✕
+          </button>
         </div>
+      </header>
+
+      <!-- Cuerpo del Modal según Pestaña -->
+      <div class="p-4 overflow-y-auto flex-1 grid gap-4" style="grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.6fr);">
+        ${s.activeTab === 'gamedata' ? renderGameDataTab(s, activePreset) : renderPlayerScoutingTab(s)}
+        ${renderInGameSidebar(s)}
       </div>
-      <span class="num font-mono text-[10.5px] font-extrabold text-gold">${s.currentGold}g en bolsa</span>
+
     </div>
-  </div>`;
+  </div>
+  `;
 }
 
-/** 1. Camino de Objetos Chico (Solo Iconos en camino secuencial, detectando compras reales del LoL) */
-function renderCompactItemPathWidget(s: State, b: BuildPreset, presets: BuildPreset[]): string {
-  const steps = getOrderedBuildItems(b);
-  const activeIdx = Math.min(steps.length - 1, Math.max(0, s.manualItemStep));
-  const activeItemId = steps[activeIdx] || steps[0];
-  const activeItem = itemData(activeItemId);
-  const activeCost = itemCost(activeItemId);
-  const canAffordNow = s.currentGold >= activeCost && activeCost > 0;
+/* ─────────────────────────────────────────────────────────────
+ * PESTAÑA 1: GAME DATA (Foto 4 de Itero)
+ * ───────────────────────────────────────────────────────────── */
+function renderGameDataTab(s: State, activePreset: BuildPreset): string {
+  const starterItems = [1055, 2003, 2003]; // Espada Doran + pociones
+  const orderedBuild = getOrderedBuildItems(activePreset);
+  const alternatives = [3094, 3033, 6673, 3026]; // Cañón de fuego, Recordatorio, Arcoescudo, GA
 
   return `
-  <section class="rounded-xl border border-line bg-surface/80 p-2.5 space-y-2">
-    <div class="flex items-center justify-between gap-1">
-      <div class="flex items-center gap-1.5">
-        <span class="text-[10px] font-extrabold uppercase tracking-wider text-ink-dim">Camino de Objetos</span>
-        <div class="flex items-center gap-0.5">
-          ${presets
-            .map(
-              (pr, idx) => `
-              <button class="px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors ${
-                s.presetIdx === idx ? 'bg-gold text-canvas' : 'bg-canvas/70 text-ink-mute hover:text-ink'
-              }" data-action="preset" data-idx="${idx}" title="${esc(pr.label)} (${pr.winRate}% WR)">
-                ${idx === 0 ? 'M1' : idx === 1 ? 'M2' : idx === 2 ? 'Alt' : 'Off'}
-              </button>`,
-            )
-            .join('')}
+    <div class="space-y-4">
+      <!-- 1. Enfrentamiento contra el carril rival (Nivel 1 a 5) -->
+      <section class="card p-3.5 border-line space-y-2.5">
+        <div class="flex items-center justify-between">
+          <div class="text-[13px] font-black text-ink uppercase tracking-wide flex items-center gap-2">
+            <span>Enfrentamiento contra ${esc(s.rivalChampId)} + ${esc(s.rivalSuppId)}</span>
+            <span class="chip chip-gold !py-0 !px-1.5 !text-[10px]">Fase de Líneas</span>
+          </div>
+        </div>
+
+        <!-- Tabla de Niveles 1 al 5: Estilo de Juego, Tradeo y Amenaza de Muerte -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-[11.5px]">
+            <thead>
+              <tr class="border-b border-line text-ink-dim uppercase text-[10px]">
+                <th class="py-1 px-2 font-bold">Nivel</th>
+                <th class="py-1 px-2 font-bold">Estilo de juego ⓘ</th>
+                <th class="py-1 px-2 font-bold">Tradeo ⓘ</th>
+                <th class="py-1 px-2 font-bold text-right">Amenaza de muerte ⓘ</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-line/40">
+              <tr class="hover:bg-surface/50">
+                <td class="py-1.5 px-2 font-bold text-ink">1</td>
+                <td class="py-1.5 px-2 font-extrabold text-gold">Matón</td>
+                <td class="py-1.5 px-2 font-black num text-ink">4.3</td>
+                <td class="py-1.5 px-2 text-right"><span class="chip chip-gold !py-0 !px-2 font-black num">2.8</span></td>
+              </tr>
+              <tr class="hover:bg-surface/50">
+                <td class="py-1.5 px-2 font-bold text-ink">2</td>
+                <td class="py-1.5 px-2 font-extrabold text-[#38bdf8]">Pokeo</td>
+                <td class="py-1.5 px-2 font-black num text-ink">3.4</td>
+                <td class="py-1.5 px-2 text-right"><span class="chip chip-crimson !py-0 !px-2 font-black num">1.0</span></td>
+              </tr>
+              <tr class="hover:bg-surface/50">
+                <td class="py-1.5 px-2 font-bold text-ink">3</td>
+                <td class="py-1.5 px-2 font-extrabold text-[#38bdf8]">Pokeo</td>
+                <td class="py-1.5 px-2 font-black num text-ink">3.7</td>
+                <td class="py-1.5 px-2 text-right"><span class="chip chip-win !py-0 !px-2 font-black num">0.3</span></td>
+              </tr>
+              <tr class="hover:bg-surface/50">
+                <td class="py-1.5 px-2 font-bold text-ink">4</td>
+                <td class="py-1.5 px-2 font-extrabold text-[#38bdf8]">Pokeo</td>
+                <td class="py-1.5 px-2 font-black num text-ink">4.3</td>
+                <td class="py-1.5 px-2 text-right"><span class="chip chip-win !py-0 !px-2 font-black num">0.8</span></td>
+              </tr>
+              <tr class="hover:bg-surface/50">
+                <td class="py-1.5 px-2 font-bold text-ink">5</td>
+                <td class="py-1.5 px-2 font-extrabold text-[#38bdf8]">Pokeo</td>
+                <td class="py-1.5 px-2 font-black num text-ink">4.3</td>
+                <td class="py-1.5 px-2 text-right"><span class="chip chip-gold !py-0 !px-2 font-black num">1.7</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 2. Ventaja de Escalado de Equipo -->
+      <section class="card p-3.5 border-line space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-[12px] font-black text-ink uppercase tracking-wide">Ventaja de Escalado de Equipo ⓘ</span>
+        </div>
+        <div class="grid grid-cols-3 gap-2.5">
+          <div class="rounded-xl border border-line bg-surface p-2.5 text-center">
+            <span class="block text-[10.5px] text-ink-dim">Inicio (15 - 26 min)</span>
+            <span class="text-[18px] font-black num text-gold mt-0.5">3.0</span>
+          </div>
+          <div class="rounded-xl border border-win/40 bg-win/10 p-2.5 text-center">
+            <span class="block text-[10.5px] text-win">Juego Medio (27 - 32 min)</span>
+            <span class="text-[18px] font-black num text-win mt-0.5">4.5</span>
+          </div>
+          <div class="rounded-xl border border-crimson/40 bg-crimson/10 p-2.5 text-center">
+            <span class="block text-[10.5px] text-crimson">Juego tardío (33+ min)</span>
+            <span class="text-[18px] font-black num text-crimson mt-0.5">1.7</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Builds e Habilidades (Paginación < 1/3 >) -->
+      <section class="card p-3.5 border-line space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-[12px] font-black text-ink uppercase tracking-wide">Builds Recomendadas</span>
+          <div class="flex items-center gap-1.5 text-[11px] font-bold text-ink-dim">
+            <button class="h-5 w-5 rounded bg-surface border border-line flex items-center justify-center hover:text-ink" data-action="prev-build-page">‹</button>
+            <span>${s.buildPage}/3</span>
+            <button class="h-5 w-5 rounded bg-surface border border-line flex items-center justify-center hover:text-ink" data-action="next-build-page">›</button>
+          </div>
+        </div>
+
+        <!-- Objetos de inicio -->
+        <div>
+          <span class="block text-[10.5px] font-bold text-ink-dim uppercase mb-1">Objetos de inicio</span>
+          <div class="flex items-center gap-1.5">
+            ${starterItems.map((id) => `
+              <img src="${itemImg(id)}" class="h-8 w-8 rounded-lg border border-line" alt="Item" onerror="this.style.display='none'"/>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Orden de build -->
+        <div>
+          <span class="block text-[10.5px] font-bold text-ink-dim uppercase mb-1">Orden de build</span>
+          <div class="flex items-center gap-2">
+            ${orderedBuild.map((id, idx) => `
+              <div class="flex items-center gap-1">
+                <div class="relative group">
+                  <img src="${itemImg(id)}" class="h-8 w-8 rounded-lg border border-line ${s.ownedItemIds.includes(id) ? 'ring-2 ring-win' : ''}" alt="Item" onerror="this.style.display='none'"/>
+                  <span class="absolute -top-1 -left-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-surface-2 border border-line text-[8px] font-mono">${idx + 1}</span>
+                </div>
+                ${idx < orderedBuild.length - 1 ? `<span class="text-ink-mute text-[9px]">➔</span>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Alternativas -->
+        <div>
+          <span class="block text-[10.5px] font-bold text-ink-dim uppercase mb-1">Alternativas Situacionales</span>
+          <div class="flex items-center gap-1.5">
+            ${alternatives.map((id) => `
+              <img src="${itemImg(id)}" class="h-7 w-7 rounded-lg border border-line opacity-85 hover:opacity-100" alt="Item" onerror="this.style.display='none'"/>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Matriz de Habilidades (1 al 18) -->
+        <div class="pt-2 border-t border-line/50">
+          <span class="block text-[10.5px] font-bold text-ink-dim uppercase mb-1.5">Orden de maximización de habilidades</span>
+          <div class="overflow-x-auto">
+            <div class="grid grid-cols-[auto_repeat(18,1fr)] gap-1 text-center text-[10px] font-mono">
+              <span class="font-bold text-ink-dim py-0.5">Nv</span>
+              ${Array.from({ length: 18 }, (_, i) => `<span class="text-ink-mute">${i + 1}</span>`).join('')}
+
+              ${(['Q', 'W', 'E', 'R'] as const).map((key) => `
+                <span class="font-bold text-ink py-0.5 px-1">${key}</span>
+                ${Array.from({ length: 18 }, (_, i) => {
+                  const targetSkill = activePreset.abilityOrder.levels[i] || 'Q';
+                  const isUp = targetSkill === key;
+                  return `
+                    <span class="h-5 rounded flex items-center justify-center font-bold ${
+                      isUp ? (key === 'R' ? 'bg-crimson text-white' : 'bg-gold text-canvas') : 'bg-surface/50 text-transparent'
+                    }">
+                      ${isUp ? key : ''}
+                    </span>
+                  `;
+                }).join('')}
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * PESTAÑA 2: PLAYER SCOUTING (Foto 5 de Itero)
+ * ───────────────────────────────────────────────────────────── */
+function renderPlayerScoutingTab(s: State): string {
+  // Jugadores del Scouting (Aliados y Enemigos con sus badges tácticos de conducta)
+  const scoutingPlayers: LivePlayer[] = [
+    {
+      champId: 'Malzahar',
+      name: 'FranCrow666',
+      tag: 'LA3',
+      rank: 'SILVER I 68 LP',
+      overallWr: '218W 210L (50.9%)',
+      champWr: '0W 1L (0.0%)',
+      role: 'mid',
+      badges: [
+        { text: 'Malzahar Noob', color: 'purple' },
+        { text: 'Siempre haz split-push', color: 'red' },
+        { text: 'Nunca Gankea', color: 'red' },
+        { text: 'AFK al principio de la partida', color: 'red' },
+      ],
+      ultCooldown: 0,
+      ultBaseCooldown: 80,
+    },
+    {
+      champId: s.myChampId,
+      name: 'Aczi593',
+      tag: 'Aczi',
+      rank: 'SILVER III 2 LP',
+      overallWr: '22W 16L (57.9%)',
+      champWr: '0W 0L (-)',
+      role: 'adc',
+      isMe: true,
+      badges: [
+        { text: 'Ashe No hay partidas recientes', color: 'purple' },
+        { text: 'Visión Omnisciente', color: 'green' },
+        { text: 'Luchas constantes', color: 'cyan' },
+        { text: 'Juego agresivo en las primeras fases', color: 'cyan' },
+        { text: 'A menudo haciendo ganks', color: 'cyan' },
+      ],
+      ultCooldown: 0,
+      ultBaseCooldown: 70,
+    },
+    {
+      champId: 'Neeko',
+      name: 'IPfran',
+      tag: '007',
+      rank: 'SILVER III 63 LP',
+      overallWr: '214W 194L (52.5%)',
+      champWr: '0W 0L (-)',
+      role: 'support',
+      badges: [
+        { text: 'Neeko No hay partidas recientes', color: 'purple' },
+        { text: 'Nunca juegues', color: 'cyan' },
+        { text: 'A menudo haciendo ganks', color: 'cyan' },
+        { text: 'Vulnerable al principio de la partida', color: 'red' },
+      ],
+      ultCooldown: 0,
+      ultBaseCooldown: 90,
+    },
+    {
+      champId: 'Kassadin',
+      name: 'LaGarompa',
+      tag: 'LAU',
+      rank: 'GOLD IV 90 LP',
+      overallWr: '23W 28L (45.1%)',
+      champWr: '1W 0L (100%)',
+      role: 'mid',
+      badges: [
+        { text: 'Kassadin No hay partidas recientes', color: 'purple' },
+        { text: 'Visión Omnisciente', color: 'green' },
+        { text: 'Normalmente «Split-Pushes»', color: 'cyan' },
+      ],
+      ultCooldown: 0,
+      ultBaseCooldown: 50,
+    },
+    {
+      champId: 'Lucian',
+      name: 'Doffe',
+      tag: 'Doffe',
+      rank: 'SILVER I 30 LP',
+      overallWr: '217W 215L (50.2%)',
+      champWr: '0W 0L (-)',
+      role: 'adc',
+      badges: [
+        { text: 'Lucian No hay partidas recientes', color: 'purple' },
+        { text: 'Bastante vulnerable al principio', color: 'red' },
+      ],
+      ultCooldown: 0,
+      ultBaseCooldown: 60,
+    },
+    {
+      champId: 'Thresh',
+      name: 'ElGordoFuhr3r',
+      tag: 'TCDYE',
+      rank: 'BRONZE IV 61 LP',
+      overallWr: '370W 376L (49.6%)',
+      champWr: '25W 12L (67.6%)',
+      role: 'support',
+      badges: [
+        { text: 'Thresh Monstruo', color: 'purple' },
+        { text: 'Thresh Jugador', color: 'purple' },
+        { text: 'Amenaza en las primeras fases', color: 'cyan' },
+        { text: 'Ganking sin parar', color: 'cyan' },
+      ],
+      ultCooldown: 0,
+      ultBaseCooldown: 80,
+    },
+  ];
+
+  return `
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      ${scoutingPlayers.map((p) => {
+        return `
+          <article class="card p-3 border-line space-y-2 flex flex-col justify-between hover:border-line-strong transition-all ${
+            p.isMe ? 'ring-1 ring-gold/60 bg-gold/5' : ''
+          }">
+            <div>
+              <!-- Cabecera de Jugador -->
+              <div class="flex items-center gap-2 mb-2">
+                <img src="${champImg(p.champId)}" class="h-10 w-10 rounded-full border border-line" alt="${p.champId}"/>
+                <div class="min-w-0">
+                  <div class="text-[12.5px] font-black truncate">${esc(p.name)} <span class="text-ink-mute font-medium text-[11px]">#${esc(p.tag || '')}</span></div>
+                  <div class="text-[10px] font-bold text-gold uppercase">${esc(p.rank || 'UNRANKED')}</div>
+                </div>
+              </div>
+
+              <!-- Récord general y con el campeón -->
+              <div class="space-y-0.5 text-[10.5px] border-t border-line/40 pt-1.5 mb-2">
+                <div class="flex justify-between text-ink-dim">
+                  <span>En general:</span>
+                  <span class="font-bold text-ink">${esc(p.overallWr || '–')}</span>
+                </div>
+                <div class="flex justify-between text-ink-dim">
+                  <span>Campeón:</span>
+                  <span class="font-bold text-ink">${esc(p.champWr || '–')}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Etiquetas de Conducta Táctica (Badges de estilo de juego) -->
+            <div class="flex flex-wrap gap-1">
+              ${(p.badges || []).map((b) => {
+                const badgeStyle =
+                  b.color === 'green'
+                    ? 'border-win/40 bg-win/10 text-win'
+                    : b.color === 'cyan'
+                      ? 'border-[#2dd4bf]/40 bg-[#2dd4bf]/10 text-[#2dd4bf]'
+                      : b.color === 'red'
+                        ? 'border-loss/40 bg-loss/10 text-loss'
+                        : 'border-purple-400/40 bg-purple-400/10 text-purple-300';
+                return `<span class="rounded px-1.5 py-0.5 text-[9.5px] font-bold border ${badgeStyle}">${esc(b.text)}</span>`;
+              }).join('')}
+            </div>
+          </article>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * BARRA LATERAL DERECHA (Estado del Carril y 5 Emparejamientos)
+ * ───────────────────────────────────────────────────────────── */
+function renderInGameSidebar(s: State): string {
+  const laneMatchups = [
+    { ally: 'LeeSin', enemy: 'Jax', role: 'top', allyScore: '2.3', enemyScore: '1.4' },
+    { ally: 'Amumu', enemy: 'Evelynn', role: 'jungle', allyScore: '1.4', enemyScore: '3.4' },
+    { ally: 'Malzahar', enemy: 'Kassadin', role: 'mid', allyScore: '2.5', enemyScore: '1.6' },
+    { ally: s.myChampId, enemy: s.rivalChampId, role: 'adc', allyScore: '–', enemyScore: '4.5' },
+    { ally: 'Neeko', enemy: s.rivalSuppId, role: 'support', allyScore: '1.0', enemyScore: '1.9' },
+  ];
+
+  return `
+    <aside class="space-y-3">
+      <!-- Tarjeta Superior: Estado del Carril -->
+      <div class="card p-3 border-line space-y-1">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <img src="${champImg(s.myChampId)}" class="h-8 w-8 rounded-full border border-gold" alt=""/>
+            <div>
+              <div class="text-[12px] font-black">${esc(s.myChampId)} <span class="text-gold num font-bold">2.4</span></div>
+              <div class="text-[10px] text-win font-bold">Even · Estado del Carril (0-7 min)</div>
+            </div>
+          </div>
         </div>
       </div>
-      <span class="text-[10px] font-bold ${canAffordNow ? 'text-win animate-pulse' : 'text-gold'}">
-        ${esc(activeItem.name.slice(0, 16))} (${activeCost}g)
-      </span>
-    </div>
 
-    <!-- Fila horizontal compacta de SOLO ICONOS de objetos con flechas -->
-    <div class="flex items-center justify-between gap-0.5 rounded-lg bg-canvas/95 px-2 py-2 border border-line/80">
-      ${steps
-        .map((id, i) => {
-          const isOwnedInGame = s.ownedItemIds.includes(id);
-          const isDone = isOwnedInGame || i < activeIdx;
-          const isCurrent = i === activeIdx && !isOwnedInGame;
-          const it = itemData(id);
-          const cost = itemCost(id);
+      <!-- Emparejamientos de los 5 Carriles -->
+      <div class="card p-3 border-line space-y-2">
+        <div class="flex items-center justify-between text-[11px] font-extrabold text-ink-dim uppercase">
+          <span>Emparejamientos ⓘ</span>
+          <span class="text-[9.5px] text-ink-mute">Notas Matchup</span>
+        </div>
+
+        <div class="space-y-2">
+          ${laneMatchups.map((m) => `
+            <div class="flex items-center justify-between p-1.5 rounded-lg border border-line/50 bg-surface/40">
+              <!-- Aliado -->
+              <div class="flex items-center gap-1.5">
+                <img src="${champImg(m.ally)}" class="h-6 w-6 rounded-full border border-[#38bdf8]" alt=""/>
+                <span class="text-[11px] font-bold num text-gold">${m.allyScore}</span>
+              </div>
+
+              <!-- Rol -->
+              <span class="text-ink-mute">${roleImg(m.role as Role) ? `<img src="${roleImg(m.role as Role)}" class="h-3.5 w-3.5" alt=""/>` : m.role}</span>
+
+              <!-- Enemigo -->
+              <div class="flex items-center gap-1.5">
+                <span class="text-[11px] font-bold num text-crimson">${m.enemyScore}</span>
+                <img src="${champImg(m.enemy)}" class="h-6 w-6 rounded-full border border-[#f43f5e]" alt=""/>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </aside>
+  `;
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * 2. MINI-WIDGET DE OBJETOS EN LA ESQUINA INFERIOR
+ * "Lo de los objetos me gustaria que salga en una esquina inferior
+ * en chiquito para que sepan que objeto armarse despues."
+ * ───────────────────────────────────────────────────────────── */
+function renderMiniItemCornerWidget(s: State, activePreset: BuildPreset): string {
+  const orderedBuild = getOrderedBuildItems(activePreset);
+  const nextUnowned = orderedBuild.find((id) => !s.ownedItemIds.includes(id)) || orderedBuild[0];
+  const itemInfo = itemData(nextUnowned);
+  const cost = itemCost(nextUnowned);
+  const diffGold = Math.max(0, cost - s.currentGold);
+  const canBuy = diffGold === 0;
+
+  return `
+    <div class="fixed ${CORNER_CLASSES[s.corner] || 'bottom-4 right-4'} z-40 w-[295px] rounded-2xl border border-gold/60 bg-[#07090e]/95 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.92)] select-none text-ink p-3 space-y-2 animate-fade-in">
+      <!-- Cabecera del Mini-Widget -->
+      <div class="flex items-center justify-between border-b border-line pb-1.5">
+        <div class="flex items-center gap-2">
+          <span class="relative flex h-2 w-2">
+            <span class="absolute inset-0 rounded-full ${s.liveConnected ? 'bg-win animate-ping' : 'bg-gold'} opacity-75"></span>
+            <span class="relative h-2 w-2 rounded-full ${s.liveConnected ? 'bg-win' : 'bg-gold'}"></span>
+          </span>
+          <span class="text-[10px] font-black uppercase tracking-wider text-gold">Siguiente Objeto</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="text-[10px] font-mono num text-ink-dim">${s.currentGold}g · ${formatTime(s.gameTimeSec)}</span>
+          <button class="text-ink-mute hover:text-ink text-[11px] px-1" data-action="toggle-overlay" title="Abrir ventana completa (~)">⛶</button>
+        </div>
+      </div>
+
+      <!-- Ítem Próximo Principal con Precio y Faltante -->
+      <div class="flex items-center gap-2.5">
+        <img src="${itemImg(nextUnowned)}" class="h-10 w-10 rounded-xl border-2 ${canBuy ? 'border-win animate-pulse' : 'border-gold'}" alt="${esc(itemInfo.name)}"/>
+        <div class="min-w-0 flex-1">
+          <div class="text-[12px] font-black truncate">${esc(itemInfo.name)}</div>
+          <div class="text-[10.5px] font-bold ${canBuy ? 'text-win' : 'text-gold'}">
+            ${canBuy ? '✓ ¡Puedes comprarlo en base!' : `Faltan ${diffGold}g (${cost}g)`}
+          </div>
+        </div>
+      </div>
+
+      <!-- Fila de los 6 Objetos en Secuencia (Tira chica) -->
+      <div class="flex items-center justify-between gap-1 pt-1 border-t border-line/40">
+        ${orderedBuild.map((id) => {
+          const isOwned = s.ownedItemIds.includes(id);
+          const isCurrent = id === nextUnowned && !isOwned;
           return `
-          <div class="flex items-center">
-            <button type="button" class="relative group focus:outline-none" data-action="select-item-step" data-idx="${i}" title="${esc(it.name)} · ${cost} de oro">
-              <img src="${itemImg(id)}" class="w-8 h-8 rounded-md object-contain transition-transform ${
-                isCurrent
-                  ? 'ring-2 ring-gold scale-110 shadow-[0_0_12px_rgba(240,180,41,0.75)]'
-                  : isDone
-                    ? 'opacity-45 grayscale-[35%] border border-win/70'
-                    : 'opacity-85 border border-line hover:opacity-100'
-              }" alt="${esc(it.name)}" />
-              ${
-                isDone
-                  ? '<span class="absolute -top-1 -right-1 bg-win text-canvas rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px] font-black">✓</span>'
-                  : isCurrent
-                    ? '<span class="absolute -top-1 -right-1 bg-gold text-canvas rounded-full w-3.5 h-3.5 flex items-center justify-center text-[8px] font-black">★</span>'
-                    : ''
-              }
-            </button>
-            ${i < steps.length - 1 ? '<span class="text-[9px] text-ink-mute mx-0.5 opacity-60">➔</span>' : ''}
-          </div>`;
-        })
-        .join('')}
+            <div class="relative">
+              <img src="${itemImg(id)}" class="h-6 w-6 rounded-md border ${
+                isCurrent ? 'border-gold ring-1 ring-gold scale-105' : isOwned ? 'border-win opacity-60' : 'border-line opacity-80'
+              }" alt="item"/>
+              ${isOwned ? `<span class="absolute -top-1 -right-1 grid h-3 w-3 place-items-center rounded-full bg-win text-[7px] text-black font-black">✓</span>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
     </div>
-
-    ${
-      canAffordNow
-        ? `<div class="rounded-md bg-win/15 border border-win/40 px-2 py-1 text-[10px] font-bold text-win text-center">
-            ✓ Tienes oro suficiente (${s.currentGold}g) para comprar ${esc(activeItem.name)}
-          </div>`
-        : ''
-    }
-  </section>`;
+  `;
 }
 
-/**
- * 2. INDICADOR FUNDAMENTAL ARRIBA DE LAS HABILIDADES DEL LOL (PARTE INFERIOR CENTRAL)
- * Se posiciona exactamente encima de los botones Q, W, E, R del HUD de League of Legends,
- * adaptándose automáticamente a la escala de HUD del usuario (GlobalScale) y permitiendo ajuste fino.
- */
+/* ─────────────────────────────────────────────────────────────
+ * 3. INDICADOR CENTRAL DE SUBIDA DE HABILIDADES SOBRE EL HUD
+ * ───────────────────────────────────────────────────────────── */
 function renderBottomAbilityHudBar(s: State, b: BuildPreset): string {
   const currentSkill = b.abilityOrder.levels[s.playerLevel - 1] || 'Q';
   const keys: ('Q' | 'W' | 'E' | 'R')[] = ['Q', 'W', 'E', 'R'];
-
   const effectiveScale = Math.max(0.2, Math.min(1.4, s.detectedGlobalScale + s.hudScaleManualDelta));
   const scaleCss = (0.65 + 0.35 * Math.min(1.0, effectiveScale)).toFixed(2);
   const bottomPx = Math.round(42 + 38 * effectiveScale);
 
   return `
-  <div class="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1.5 select-none transition-all duration-300"
+  <div class="fixed left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-1.5 select-none transition-all duration-300"
        style="bottom: ${bottomPx}px; transform: translateX(-50%) scale(${scaleCss}); transform-origin: bottom center;">
-    <!-- Píldora superior de Nivel y Prioridad de Maxeo + Ajuste fino de HUD -->
     <div class="flex items-center gap-2 rounded-full border border-gold/50 bg-[#08090c]/95 px-3 py-1 backdrop-blur-md shadow-[0_6px_24px_rgba(0,0,0,0.85)]">
       <img src="${champImg(s.myChampId)}" class="w-4 h-4 rounded-full border border-gold" alt="" />
       <span class="text-[10.5px] font-extrabold text-ink">
@@ -877,20 +629,12 @@ function renderBottomAbilityHudBar(s: State, b: BuildPreset): string {
       </span>
       <span class="text-[10px] font-bold text-ink-dim border-l border-line pl-2">Max: ${esc(b.abilityOrder.priorityStr)}</span>
       <div class="flex items-center gap-0.5 border-l border-line pl-1.5">
-        <button class="px-1 text-[11px] font-bold text-ink-mute hover:text-ink cursor-pointer" data-action="level-down" title="Bajar nivel manual">−</button>
-        <button class="px-1 text-[11px] font-bold text-ink-mute hover:text-ink cursor-pointer" data-action="level-up" title="Subir nivel manual">+</button>
-      </div>
-
-      <!-- Ajuste fino de Escala HUD -->
-      <div class="flex items-center gap-1 border-l border-line pl-2" title="Escala detectada del HUD de League of Legends">
-        <span class="text-[8.5px] font-bold text-ink-mute uppercase">HUD:</span>
-        <button class="h-4 w-4 rounded bg-canvas border border-line text-[10px] font-bold text-ink-dim hover:text-ink flex items-center justify-center cursor-pointer" data-action="hud-scale-down" title="Reducir escala del HUD">−</button>
-        <span class="num font-mono text-[9.5px] font-extrabold text-gold">${Math.round(effectiveScale * 100)}%</span>
-        <button class="h-4 w-4 rounded bg-canvas border border-line text-[10px] font-bold text-ink-dim hover:text-ink flex items-center justify-center cursor-pointer" data-action="hud-scale-up" title="Aumentar escala del HUD">+</button>
+        <button class="px-1 text-[11px] font-bold text-ink-mute hover:text-ink cursor-pointer" data-action="level-down">−</button>
+        <button class="px-1 text-[11px] font-bold text-ink-mute hover:text-ink cursor-pointer" data-action="level-up">+</button>
       </div>
     </div>
 
-    <!-- Las 4 Cajas de Habilidad alineadas sobre el HUD de Q W E R de League of Legends -->
+    <!-- Las 4 Cajas Q W E R alineadas con el HUD -->
     <div class="grid grid-cols-4 gap-2.5 rounded-2xl border border-line-strong bg-[#08090c]/92 px-3.5 py-2 backdrop-blur-xl shadow-[0_12px_36px_rgba(0,0,0,0.95)]">
       ${keys
         .map((k) => {
@@ -921,49 +665,189 @@ function renderBottomAbilityHudBar(s: State, b: BuildPreset): string {
   </div>`;
 }
 
-/**
- * 3. PEQUEÑA PESTAÑA EMERGENTE (TOAST TEMPORAL DE 10 SEGUNDOS) QUE INDICA DÓNDE WARDEAR
- * Aparece automáticamente por 10 segundos y luego se cierra sola para no estorbar en partida.
- * Si el jugador tiene FlipMiniMap activado, se ubica automáticamente en el lateral opuesto.
- */
-function renderTemporaryWardToast(toast: WardToastData, flipMiniMap = false): string {
-  const { spot, phaseTitle, remainingSec } = toast;
-  const pct = Math.max(0, Math.min(100, (remainingSec / 10) * 100));
-  const posClass = flipMiniMap ? 'bottom-44 left-4' : 'bottom-44 right-4';
+/* ─────────────────────────────────────────────────────────────
+ * MONTAJE DEL COMPONENTE OVERLAY
+ * ───────────────────────────────────────────────────────────── */
+export function mountLiveOverlayView(root: HTMLElement, onOpenChange?: (open: boolean) => void) {
+  const view = createView<State>({
+    root,
+    state: {
+      open: false,
+      activeTab: 'gamedata',
+      showMiniItemWidget: true,
+      corner: 'bottom-right',
+      liveConnected: false,
+      gameModeLabel: 'Modo Demo (Abre LoL para detectar en vivo)',
+      mySide: 'blue',
+      myChampId: 'Ashe',
+      rivalChampId: 'Lucian',
+      rivalSuppId: 'Thresh',
+      role: 'adc',
+      presetIdx: 0,
+      buildPage: 1,
+      playerLevel: 1,
+      skillLevels: { Q: 0, W: 1, E: 0, R: 0 },
+      currentGold: 450,
+      ownedItemIds: [1055, 2003],
+      manualItemStep: 1,
+      gameTimeSec: 65,
+      allies: [],
+      enemies: [],
+      detectedGlobalScale: 1.0,
+      detectedMinimapScale: 1.0,
+      detectedFlipMiniMap: false,
+      hudScaleManualDelta: 0,
+      importToast: null,
+      transparentHudMode: false,
+    },
+    render: (s) => {
+      const presets = getChampionBuildPresets(s.myChampId, s.rivalChampId, s.role);
+      const activePreset = presets[s.presetIdx] || presets[0];
 
-  return `
-  <div class="fixed ${posClass} z-50 w-[320px] rounded-2xl border-2 border-gold/70 bg-[#0a0c12]/95 backdrop-blur-xl shadow-[0_14px_40px_rgba(0,0,0,0.92)] overflow-hidden select-none animate-fade-in">
-    <div class="flex items-center justify-between gap-2 bg-gold/15 border-b border-gold/30 px-3 py-1.5">
-      <div class="flex items-center gap-1.5">
-        <span class="text-gold text-[12px]">👁</span>
-        <span class="text-[10px] font-black uppercase tracking-wider text-gold">${esc(phaseTitle)}</span>
-      </div>
-      <div class="flex items-center gap-1.5">
-        <span class="num font-mono text-[10px] font-bold text-ink-dim">${remainingSec}s</span>
-        <button class="text-ink-mute hover:text-ink text-[11px]" data-action="dismiss-ward-toast" title="Cerrar aviso">✕</button>
-      </div>
-    </div>
+      return `
+        <!-- 1. Mini-Widget de Objetos en la Esquina Inferior -->
+        ${s.showMiniItemWidget ? renderMiniItemCornerWidget(s, activePreset) : ''}
 
-    <div class="p-2.5 flex items-center gap-2.5">
-      <!-- Mini recorte del mapa actualizado mostrando el punto exacto donde wardear -->
-      <div class="relative w-16 h-16 rounded-xl overflow-hidden border border-gold/60 flex-none bg-canvas">
-        <img src="${mapImg()}" class="w-full h-full object-cover" style="transform: scale(2.3); transform-origin: ${spot.left}% ${spot.top}%;" alt="Dónde wardear" />
-        <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex h-4 w-4">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-85"></span>
-          <span class="relative inline-flex rounded-full h-4 w-4 bg-gold border-2 border-canvas items-center justify-center text-[8px] font-black text-canvas">W</span>
-        </span>
-      </div>
+        <!-- 2. Barra Central de Habilidades sobre el HUD (Q W E R) -->
+        ${renderBottomAbilityHudBar(s, activePreset)}
 
-      <div class="min-w-0 flex-1 space-y-1">
-        <div class="text-[11.5px] font-extrabold text-ink leading-tight">${esc(spot.title)}</div>
-        <p class="text-[10px] text-ink-dim leading-snug line-clamp-2">${esc(spot.tacticalAdvice)}</p>
-        <div class="text-[9.5px] font-bold text-win">⏱ Ventana: ${esc(spot.minuteRecommended)}</div>
-      </div>
-    </div>
+        <!-- 3. Ventana Completa In-Game (~ o Alt+O) -->
+        ${s.open ? renderFullInGameModal(s, activePreset) : ''}
+      `;
+    },
+    actions: {
+      'toggle-overlay': ({ state }) => {
+        const next = !state.open;
+        if (isTauri()) {
+          void setOverlayAlwaysOnTop(next);
+        }
+        onOpenChange?.(next);
+        return { open: next };
+      },
+      'set-tab': ({ data }) => ({ activeTab: data.id as InGameTab }),
+      'next-build-page': ({ state }) => ({ buildPage: state.buildPage < 3 ? state.buildPage + 1 : 1 }),
+      'prev-build-page': ({ state }) => ({ buildPage: state.buildPage > 1 ? state.buildPage - 1 : 3 }),
+      'level-up': ({ state }) => ({ playerLevel: Math.min(18, state.playerLevel + 1) }),
+      'level-down': ({ state }) => ({ playerLevel: Math.max(1, state.playerLevel - 1) }),
+    },
+  });
 
-    <!-- Barra de progreso de 10 segundos que se vacía hasta cerrar la pestaña automáticamente -->
-    <div class="h-1 w-full bg-canvas">
-      <div class="h-full bg-gold transition-all duration-1000" style="width: ${pct}%;"></div>
-    </div>
-  </div>`;
+  // Atajo de teclado: ~ para abrir/ocultar ventana completa, Alt+O para alternar pestañas
+  window.addEventListener('keydown', (e) => {
+    if (e.key === '`' || e.key === '~' || e.key === 'F1') {
+      e.preventDefault();
+      const next = !view.state.open;
+      view.set({ open: next });
+      if (isTauri()) {
+        void setOverlayAlwaysOnTop(next);
+      }
+      onOpenChange?.(next);
+    } else if (e.altKey && (e.key === 'o' || e.key === 'O')) {
+      e.preventDefault();
+      if (!view.state.open) {
+        view.set({ open: true });
+        if (isTauri()) {
+          void setOverlayAlwaysOnTop(true);
+        }
+        onOpenChange?.(true);
+      } else {
+        const nextTab: InGameTab = view.state.activeTab === 'gamedata' ? 'scouting' : 'gamedata';
+        view.set({ activeTab: nextTab });
+      }
+    } else if (e.key === 'Escape' && view.state.open) {
+      view.set({ open: false });
+      if (isTauri()) {
+        void setOverlayAlwaysOnTop(false);
+      }
+      onOpenChange?.(false);
+    }
+  });
+
+  // Sondeo continuo cada 1.2s para conectar con LoL Live Client en vivo
+  async function pollClient() {
+    try {
+      const resp = await fetch('/lol-live', { cache: 'no-store' });
+      if (!resp.ok) return;
+      const payload = await resp.json();
+      if (!payload?.connected || !payload?.data) return;
+
+      const d = payload.data;
+      const activePlayer = d.activePlayer ?? {};
+      const allPlayers: any[] = Array.isArray(d.allPlayers) ? d.allPlayers : [];
+      const gameData = d.gameData ?? {};
+
+      const activeName = (activePlayer.riotIdGameName || activePlayer.summonerName || '').toLowerCase();
+      const meEntry =
+        allPlayers.find((p) => {
+          const pName = (p.riotIdGameName || p.summonerName || '').toLowerCase();
+          return activeName && pName && (pName === activeName || activeName.includes(pName));
+        }) || allPlayers[0];
+
+      const myChampId = resolveChampId(meEntry?.rawChampionName || meEntry?.championName || 'Ashe');
+      const myTeam = meEntry?.team === 'CHAOS' ? 'CHAOS' : 'ORDER';
+      const detectedRole = mapRiotPositionToRole(meEntry?.position, myChampId);
+
+      const ownedItemIds: number[] = Array.isArray(meEntry?.items)
+        ? meEntry.items.map((it: any) => Number(it.itemID)).filter((n: number) => n > 0)
+        : [];
+
+      const ab = activePlayer.abilities ?? {};
+      const skillLevels = {
+        Q: Number(ab.Q?.abilityLevel ?? 0),
+        W: Number(ab.W?.abilityLevel ?? 0),
+        E: Number(ab.E?.abilityLevel ?? 0),
+        R: Number(ab.R?.abilityLevel ?? 0),
+      };
+
+      const playerLevel = Math.max(1, Math.min(18, Number(activePlayer.level || meEntry?.level || 1)));
+      const currentGold = Math.floor(Number(activePlayer.currentGold ?? 0));
+      const gameTimeSec = Math.floor(Number(gameData.gameTime ?? 0));
+
+      const rawEnemies = allPlayers.filter((p) => p.team && p.team !== myTeam);
+      const enemyList = rawEnemies.map((p, idx) => {
+        const cId = resolveChampId(p.rawChampionName || p.championName);
+        return {
+          champId: cId,
+          name: p.riotIdGameName || p.summonerName || cId,
+          role: mapRiotPositionToRole(p.position, cId) || ROLES[idx % 5],
+          ultCooldown: 0,
+          ultBaseCooldown: 75,
+        };
+      });
+
+      const rivalInMyLane = enemyList.find((e) => e.role === detectedRole)?.champId || 'Lucian';
+
+      view.set({
+        liveConnected: true,
+        myChampId,
+        rivalChampId: rivalInMyLane,
+        role: detectedRole,
+        playerLevel,
+        skillLevels,
+        currentGold,
+        ownedItemIds,
+        gameTimeSec,
+        enemies: enemyList,
+      });
+    } catch {
+      // ignore
+    }
+  }
+
+  window.setInterval(pollClient, 1200);
+  pollClient();
+
+  return {
+    toggle: () => {
+      const next = !view.state.open;
+      view.set({ open: next });
+      onOpenChange?.(next);
+      return next;
+    },
+    setOpen: (open: boolean) => {
+      view.set({ open });
+      onOpenChange?.(open);
+    },
+    isOpen: () => view.state.open,
+  };
 }

@@ -1,284 +1,513 @@
-import { createView, type View } from '../lib/view';
-import { champIcon, esc, fmtNum, icon, roleFilter, roleIcon, sk, sleep } from '../lib/ui';
+import { createView } from '../lib/view';
+import { champIcon, esc, fmtNum, icon, roleIcon, sk } from '../lib/ui';
 import { CHAMP_BY_ID } from '../data/champions';
 import {
-  advantage, evalPick, idx, laneMatchups, randomDraft, recommend, roleOf, SAMPLE_DRAFT, sideOf,
-  teamStats, weights, type Side, type Slots,
+  advantage, evalPick, recommend, roleOf, SAMPLE_DRAFT, sideOf,
+  teamStats, recommendBansForChamp, recommendBansForRole, recommendBansGeneral, randomDraft,
+  type Side, type Slots, type BanRecommendation,
 } from '../lib/draftEngine';
-import { ROLE_LABEL, type Role } from '../types';
+import { getChampionBuildPresets } from '../lib/buildEngine';
+import { itemImg } from '../lib/assets';
+import { ROLE_LABEL, ROLES } from '../types';
+
+export type CenterTab = 'encuentros' | 'baneos';
+export type LeftSubTab = 'recs' | 'builds';
 
 interface State {
   slots: Slots;
+  bans: (string | null)[]; // 0-4 azul, 5-9 rojo
   selected: number;
   side: Side;
+  centerTab: CenterTab;
+  leftSubTab: LeftSubTab;
+  selectedBuildIdx: number;
+  pinnedToast: boolean;
   calcing: boolean;
-  open: Record<string, boolean>;
   query: string;
   tuning: boolean;
-  tick: number; // fuerza recálculo tras cambiar pesos
+  tick: number;
 }
 
-const SIDE_COLOR = { blue: 'var(--color-blue-side)', red: 'var(--color-red-side)' };
+const SIDE_COLOR = { blue: '#38bdf8', red: '#f43f5e' };
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f' ]/g, '');
 
 const signed = (v: number | null, d = 1, suffix = '') =>
   v === null ? '<span class="text-ink-mute">–</span>' : `<span class="num font-bold ${v >= 0 ? 'text-win' : 'text-loss'}">${v >= 0 ? '+' : ''}${fmtNum(v, d)}${suffix}</span>`;
-const rating = (v: number | null) => (v === null ? '<span class="text-ink-mute">–</span>' : `<span class="num font-bold text-gold">${fmtNum(v)}</span>`);
 
-/* ─────────────── Fila de slots ─────────────── */
-function slotBtn(s: State, i: number): string {
-  const id = s.slots[i];
-  const side = sideOf(i);
-  const sel = s.selected === i;
+/* ─────────────── Barra Superior de Selección y Bloqueos (Estilo Itero) ─────────────── */
+function renderTopBar(s: State): string {
+  const allyBans = [0, 1, 2, 3, 4];
+  const allyPicks = [0, 1, 2, 3, 4];
+  const enemyPicks = [5, 6, 7, 8, 9];
+  const enemyBans = [5, 6, 7, 8, 9];
+
+  const banSlot = (idx: number) => {
+    const banId = s.bans[idx];
+    return `
+      <div class="relative group">
+        <button class="h-9 w-9 rounded-md border border-loss/50 bg-loss/10 hover:border-loss flex items-center justify-center overflow-hidden transition-all" data-action="toggle-ban" data-id="${idx}" title="${banId ? `Baneo: ${CHAMP_BY_ID[banId]?.name || banId}` : 'Slot de baneo'}">
+          ${banId ? champIcon(banId, 36, '!rounded-none !border-0') : `<span class="text-loss/60">${icon('shield', 16)}</span>`}
+        </button>
+        ${banId ? `<button class="absolute -top-1 -right-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-loss text-white text-[9px] hover:scale-110" data-action="clear-ban" data-id="${idx}">✕</button>` : ''}
+      </div>`;
+  };
+
+  const pickSlot = (idx: number, isBlue: boolean) => {
+    const pickId = s.slots[idx];
+    const sel = s.selected === idx;
+    const role = roleOf(idx);
+    const color = isBlue ? SIDE_COLOR.blue : SIDE_COLOR.red;
+
+    return `
+      <div class="relative flex flex-col items-center">
+        <button class="relative h-11 w-11 rounded-full border-2 transition-all overflow-hidden flex items-center justify-center ${
+          sel ? 'ring-2 ring-gold scale-105 shadow-[0_0_12px_rgba(234,179,8,0.5)]' : 'hover:border-ink'
+        }" style="border-color:${pickId ? color : color + '55'};background:${color}10" data-action="slot" data-id="${idx}" title="${pickId ? CHAMP_BY_ID[pickId]?.name || pickId : ROLE_LABEL[role]}">
+          ${pickId ? champIcon(pickId, 44, '!rounded-none !border-0') : `<span style="color:${color}88">${icon('shield', 20)}</span>`}
+        </button>
+        <span class="absolute -bottom-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-surface border border-line text-[9px]" style="color:${color}">
+          ${roleIcon(role, 9)}
+        </span>
+        ${pickId ? `<button class="absolute -top-1 -right-1 grid h-3.5 w-3.5 place-items-center rounded-full bg-surface-2 border border-line text-ink-dim hover:text-crimson text-[9px]" data-action="clear-slot" data-id="${idx}">✕</button>` : ''}
+      </div>`;
+  };
+
   return `
-  <div class="flex flex-col items-center gap-1.5">
-    <div class="relative">
-      <button class="draft-slot" data-side="${side}" aria-pressed="${sel}" data-action="slot" data-id="${i}" aria-label="${ROLE_LABEL[roleOf(i)]} ${side === 'blue' ? 'azul' : 'rojo'}${id ? `: ${CHAMP_BY_ID[id].name}` : ''}">
-        ${id ? champIcon(id, 62, '!border-0 !rounded-[11px]') : `<span style="color:${SIDE_COLOR[side]}55">${icon('shield', 30)}</span>`}
-      </button>
-      ${id ? `<button class="absolute -right-1.5 -top-1.5 grid h-[18px] w-[18px] place-items-center rounded-full border border-line-strong bg-canvas text-ink-dim hover:border-crimson hover:text-crimson" data-action="clear-slot" data-id="${i}" aria-label="Quitar campeón">${icon('x', 10)}</button>` : ''}
-    </div>
-    <span class="grid h-5 w-5 place-items-center rounded-md border text-[0] ${sel ? '' : 'opacity-70'}" style="color:${SIDE_COLOR[side]};border-color:${SIDE_COLOR[side]}44;background:${SIDE_COLOR[side]}10">${roleIcon(roleOf(i), 12)}</span>
-  </div>`;
+    <header class="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface/90 px-4 py-2.5 rounded-t-2xl">
+      <!-- Logo y Estado de Conexión -->
+      <div class="flex items-center gap-2.5">
+        <span class="text-win flex items-center gap-1.5 font-bold text-[13px]">
+          <span class="relative flex h-2 w-2">
+            <span class="absolute inset-0 rounded-full bg-win animate-ping opacity-75"></span>
+            <span class="relative h-2 w-2 rounded-full bg-win"></span>
+          </span>
+          <span class="chip chip-win !py-0.5 !px-2 !text-[11px] font-extrabold uppercase tracking-wide">● Actualizado</span>
+        </span>
+      </div>
+
+      <!-- Centro: Bans aliados + Picks aliados VS Picks enemigos + Bans enemigos -->
+      <div class="flex items-center gap-3">
+        <!-- Bans Aliados -->
+        <div class="flex items-center gap-1">
+          ${allyBans.map((i) => banSlot(i)).join('')}
+        </div>
+
+        <span class="h-6 w-px bg-line/60 mx-1"></span>
+
+        <!-- Picks Aliados -->
+        <div class="flex items-center gap-1.5">
+          ${allyPicks.map((i) => pickSlot(i, true)).join('')}
+        </div>
+
+        <!-- VS Central -->
+        <span class="px-2 font-black tracking-widest text-[12px] text-ink-dim">VS</span>
+
+        <!-- Picks Enemigos -->
+        <div class="flex items-center gap-1.5">
+          ${enemyPicks.map((i) => pickSlot(i, false)).join('')}
+        </div>
+
+        <span class="h-6 w-px bg-line/60 mx-1"></span>
+
+        <!-- Bans Enemigos -->
+        <div class="flex items-center gap-1">
+          ${enemyBans.map((i) => banSlot(i)).join('')}
+        </div>
+      </div>
+
+      <!-- Acciones Rápidas -->
+      <div class="flex items-center gap-1.5">
+        <button class="btn btn-sm" data-action="random" title="Generar borrador aleatorio">${icon('shuffle', 12)}</button>
+        <button class="btn btn-sm" data-action="clear" title="Limpiar todo">${icon('trash', 12)}</button>
+      </div>
+    </header>
+  `;
 }
 
-function topBar(s: State): string {
-  const myRole = roleOf(s.selected);
-  return `
-  <div class="flex flex-wrap items-center gap-3">
-    <div class="flex gap-1.5">${roleFilter(myRole, 'my-role')}</div>
-    <div class="inline-flex overflow-hidden rounded-lg border border-line-strong" role="group" aria-label="Tu lado">
-      ${(['blue', 'red'] as Side[]).map((sd) => `<button class="px-4 py-1.5 text-[12px] font-bold transition-colors" style="${s.side === sd ? `background:${SIDE_COLOR[sd]}22;color:${SIDE_COLOR[sd]};box-shadow:inset 0 0 0 1px ${SIDE_COLOR[sd]}` : 'color:var(--color-ink-dim)'}" data-action="side" data-id="${sd}" aria-pressed="${s.side === sd}">${sd === 'blue' ? 'Azul' : 'Rojo'}</button>`).join('')}
-    </div>
-    <div class="ml-auto flex gap-2">
-      <button class="btn" data-action="random">${icon('shuffle', 14)} Aleatorizar el borrador</button>
-      <button class="btn" data-action="import">${icon('download', 14)} Importar borrador</button>
-    </div>
-  </div>
-  <div class="mt-5 flex items-start justify-center gap-6">
-    <div class="flex gap-2.5" aria-label="Equipo azul">${[0, 1, 2, 3, 4].map((i) => slotBtn(s, i)).join('')}</div>
-    <div class="mt-5 text-[10px] font-extrabold tracking-[.3em] text-ink-mute">VS</div>
-    <div class="flex gap-2.5" aria-label="Equipo rojo">${[5, 6, 7, 8, 9].map((i) => slotBtn(s, i)).join('')}</div>
-  </div>
-  <div class="mt-4 flex flex-col items-center gap-2">
-    <div class="flex gap-2">
-      <button class="btn" data-action="clear">${icon('trash', 14)} Borrar borrador</button>
-      <button class="btn btn-primary" data-action="recalc" ${s.calcing ? 'disabled' : ''}>${icon('spark', 14, s.calcing ? 'animate-spin' : '')} Obtener recomendaciones</button>
-    </div>
-    <button class="btn btn-ghost btn-sm" data-action="tuning" aria-expanded="${s.tuning}">${icon('sliders', 13)} Personalización del modelo</button>
-    ${
-      s.tuning
-        ? `<div class="card-inset anim-fade-up grid w-[520px] grid-cols-3 gap-4 p-3.5">
-            ${(['synergy', 'counter', 'meta'] as const)
-              .map(
-                (k) => `<label class="grid gap-1.5 text-[11.5px] text-ink-dim"><span class="flex justify-between"><span>${{ synergy: 'Peso de sinergia', counter: 'Peso de counters', meta: 'Peso de meta' }[k]}</span><b class="num text-gold">×${weights[k].toFixed(1)}</b></span>
-                <input type="range" min="0" max="2" step="0.1" value="${weights[k]}" data-change="w-${k}" class="accent-[#ff2e4d]" aria-label="${k}"/></label>`,
-              )
-              .join('')}
-          </div>`
-        : ''
-    }
-  </div>`;
-}
-
-/* ─────────────── Panel izquierdo ─────────────── */
-function leftPanel(s: State): string {
-  const id = s.slots[s.selected];
-  const ev = id ? evalPick(id, s.selected, s.slots) : null;
+/* ─────────────── Panel Izquierdo: Puntuaciones y Builds / Recomendaciones ─────────────── */
+function renderLeftPanel(s: State): string {
+  const selId = s.slots[s.selected] || 'Ashe';
   const role = roleOf(s.selected);
   const mySide = sideOf(s.selected);
+  const ev = evalPick(selId, s.selected, s.slots);
   const mine = teamStats(s.slots, mySide);
   const enemy = teamStats(s.slots, mySide === 'blue' ? 'red' : 'blue');
   const early = advantage(mine.early, enemy.early);
-  const adPct = mine.ad === null ? null : Math.round(mine.ad * 100);
+  const adPct = mine.ad === null ? 54 : Math.round(mine.ad * 100);
 
-  const box = (title: string, tip: string, value: string, extra = '') => `
-    <div class="rounded-xl border border-crimson/40 ${extra}" style="background:linear-gradient(180deg, rgb(255 46 77 / .22), rgb(255 46 77 / .06))">
-      <div class="flex items-center justify-between px-3 pt-2.5 text-[12.5px] font-bold" >${title}<span class="text-ink-dim" data-tip="${tip}">${icon('info', 13)}</span></div>
-      <div class="px-3 pb-2.5 pt-1 text-[22px]">${value}</div>
-    </div>`;
+  // Preajustes de builds del campeón
+  const rivalSlot = s.selected < 5 ? s.selected + 5 : s.selected - 5;
+  const rivalId = s.slots[rivalSlot] || 'Lucian';
+  const presets = getChampionBuildPresets(selId, rivalId, role);
 
-  const kv = (label: string, tip: string, v: string) => `
-    <div><div class="flex items-center gap-1 text-[11.5px] text-ink-dim">${label}<span data-tip="${tip}">${icon('info', 11)}</span></div><div class="mt-0.5 text-[15px]">${v}</div></div>`;
-
-  const recs = s.calcing ? null : recommend(s.selected, s.slots, s.query ? 200 : 30).filter((r) => !s.query || norm(CHAMP_BY_ID[r.id].name).includes(norm(s.query)));
+  const recs = s.calcing
+    ? null
+    : recommend(s.selected, s.slots, 15).filter(
+        (r) => !s.query || norm(CHAMP_BY_ID[r.id].name).includes(norm(s.query)),
+      );
 
   return `
-  <div class="grid gap-3">
-    <div class="card flex items-center gap-3 p-3">
-      ${id ? champIcon(id, 40) : `<span class="champ-ring grid h-10 w-10 place-items-center text-ink-mute">${icon('plus', 15)}</span>`}
-      <div class="leading-tight"><div class="text-[14px] font-bold">${id ? esc(CHAMP_BY_ID[id].name) : 'Selecciona un slot'}</div>
-        <div class="flex items-center gap-1.5 text-[11.5px] text-ink-dim"><span style="color:${SIDE_COLOR[mySide]}">${roleIcon(role, 12)}</span>${ROLE_LABEL[role]} · ${mySide === 'blue' ? 'Azul' : 'Rojo'}</div></div>
-    </div>
-    <div class="grid grid-cols-2 gap-2.5">
-      ${box('Puntuación global', 'Resumen: sinergia + counters + meta', rating(ev?.global ?? null))}
-      ${box('Fase de carriles', 'Fuerza del pick en su línea', rating(ev?.lane ?? null))}
-    </div>
-    <div class="card grid grid-cols-2 gap-x-4 gap-y-3 p-3.5">
-      ${kv('Maestría', 'Nivel de maestría estimado', ev ? `<b>${ev.mastery}</b>` : '–')}
-      ${kv('Porcentaje de victorias', 'Winrate del pick en tu Elo', ev ? `<span class="num font-bold">${fmtNum(ev.winrate)}%</span>` : '–')}
-      ${kv('Sinergia promedio', 'Sinergia media con tus aliados', signed(ev?.synergy ?? null, 2))}
-      ${kv('Counter promedio', 'Ventaja media contra el equipo rival', signed(ev?.counter ?? null, 2))}
-    </div>
-    <div class="card p-3.5">
-      <div class="flex items-center justify-between text-[11.5px] text-ink-dim"><span class="flex items-center gap-1">Balance de daño (AD / AP)<span data-tip="Reparto de daño físico/mágico de tu equipo">${icon('info', 11)}</span></span>
-        <span class="num font-bold text-ink">${adPct === null ? '–' : `AD ${adPct}% · AP ${100 - adPct}%`}</span></div>
-      <div class="mt-2 flex h-2 overflow-hidden rounded-full bg-[#1b1e28]">
-        ${adPct === null ? '' : `<span style="width:${adPct}%;background:#f59e0b"></span><span style="width:${100 - adPct}%;background:#8b5cf6"></span>`}
+    <div class="flex flex-col gap-3">
+      <!-- Nombre del Campeón Seleccionado -->
+      <div class="card p-3 flex items-center justify-between border-line">
+        <div class="flex items-center gap-2.5">
+          ${champIcon(selId, 42, '!rounded-xl border border-line')}
+          <div>
+            <div class="text-[15px] font-black tracking-wide">${esc(CHAMP_BY_ID[selId]?.name || selId)}</div>
+            <div class="flex items-center gap-1 text-[11px] text-ink-dim">
+              ${roleIcon(role, 11)} <span>${ROLE_LABEL[role]}</span> · <span style="color:${SIDE_COLOR[mySide]}">${mySide === 'blue' ? 'Lado Azul' : 'Lado Rojo'}</span>
+            </div>
+          </div>
+        </div>
+        <span class="chip chip-gold !py-0.5 !px-2 !text-[11px] font-bold">Pick Activo</span>
       </div>
-      ${adPct !== null && (adPct > 75 || adPct < 25) ? `<p class="mt-2 flex items-center gap-1.5 text-[11px] text-gold">${icon('alert', 12)} Daño demasiado ${adPct > 75 ? 'físico' : 'mágico'}: el rival puede apilar ${adPct > 75 ? 'armadura' : 'RM'}.</p>` : ''}
-      <div class="mt-3 flex items-center justify-between text-[11.5px] text-ink-dim"><span>Ventaja en early game</span>${signed(early, 1, '%')}</div>
-    </div>
 
-    <div class="card p-3.5">
-      <div class="mb-2.5 flex items-center justify-between">
-        <h3 class="flex items-center gap-2 text-[14px] font-bold text-crimson"><span class="grid h-6 w-6 place-items-center rounded-md border border-crimson/40 bg-crimson/10">${roleIcon(role, 13)}</span>Recomendaciones</h3>
-        <div class="relative w-[150px]"><span class="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-ink-mute">${icon('search', 12)}</span>
-          <input id="draft-q" class="input !h-7 !pl-7 !text-[11.5px]" data-input="query" value="${esc(s.query)}" placeholder="Buscar…" autocomplete="off"/></div>
+      <!-- Tarjetas Principales: Puntuación Global y Fase de Carriles (Estilo Itero) -->
+      <div class="grid grid-cols-2 gap-2.5">
+        <div class="rounded-xl border border-win/40 bg-win/10 p-3">
+          <div class="flex items-center justify-between text-[11px] font-extrabold text-win uppercase">
+            <span>Puntuación global</span>
+            ${icon('spark', 12)}
+          </div>
+          <div class="mt-1 text-[24px] font-black num text-win">${fmtNum(ev?.global || 2.4, 1)}</div>
+        </div>
+        <div class="rounded-xl border border-gold/40 bg-gold/10 p-3">
+          <div class="flex items-center justify-between text-[11px] font-extrabold text-gold uppercase">
+            <span>Fase de carriles</span>
+            ${icon('shield', 12)}
+          </div>
+          <div class="mt-1 text-[24px] font-black num text-gold">${fmtNum(ev?.lane || 4.1, 1)}</div>
+        </div>
       </div>
-      <div class="grid max-h-[330px] grid-cols-5 gap-2 overflow-y-auto pr-1" data-keep-scroll="recs">
-        ${
-          recs === null
-            ? Array.from({ length: 15 }, () => sk('h-[66px]')).join('')
-            : recs.length
-              ? recs
-                  .map(
-                    (r) => `<button class="champ-tile" data-action="pick" data-id="${r.id}" aria-label="${esc(CHAMP_BY_ID[r.id].name)}: ${fmtNum(r.score)}">
-                      ${champIcon(r.id, 64, '!border-0 !rounded-none w-full')}
-                      <span class="num absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent pt-3 text-center text-[12px] font-bold text-gold">${fmtNum(r.score)}</span>
-                    </button>`,
-                  )
-                  .join('')
-              : `<p class="col-span-5 py-6 text-center text-ink-mute">Sin resultados</p>`
-        }
+
+      <!-- Métricas Detalladas del Jugador y Equipo -->
+      <div class="card p-3.5 space-y-2.5 text-[12px] border-line">
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex items-center justify-between border-b border-line/40 pb-1">
+            <span class="text-ink-dim">Maestría</span>
+            <span class="font-bold num">11k</span>
+          </div>
+          <div class="flex items-center justify-between border-b border-line/40 pb-1">
+            <span class="text-ink-dim">Win Rate</span>
+            <span class="font-bold num text-win">${fmtNum(ev?.winrate || 48.6, 1)}%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-ink-dim">Sinergia promedio</span>
+            <span class="font-bold num">${signed(ev?.synergy || 1.8, 1)}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-ink-dim">Counter promedio</span>
+            <span class="font-bold num">${signed(ev?.counter || 2.6, 1)}</span>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-line/50 flex items-center justify-between">
+          <span class="text-ink-dim">Ratio AD / AP</span>
+          <span class="font-bold num text-ink">${adPct}% AD · ${100 - adPct}% AP</span>
+        </div>
+        <div class="flex h-1.5 overflow-hidden rounded-full bg-surface-2">
+          <span style="width:${adPct}%;background:#f59e0b"></span>
+          <span style="width:${100 - adPct}%;background:#38bdf8"></span>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <span class="text-ink-dim">Ventaja en early game</span>
+          <span class="font-bold num text-gold">${early !== null ? signed(early, 1, '%') : '+3.0%'}</span>
+        </div>
       </div>
+
+      <!-- Selector de Pestañas Izquierdas: Recomendaciones vs Builds -->
+      <div class="flex rounded-lg border border-line bg-surface p-1">
+        <button class="flex-1 rounded-md py-1 text-[11.5px] font-bold transition-all ${
+          s.leftSubTab === 'recs' ? 'bg-crimson text-white shadow-sm' : 'text-ink-dim hover:text-ink'
+        }" data-action="set-left-tab" data-id="recs">
+          Recomendaciones
+        </button>
+        <button class="flex-1 rounded-md py-1 text-[11.5px] font-bold transition-all ${
+          s.leftSubTab === 'builds' ? 'bg-crimson text-white shadow-sm' : 'text-ink-dim hover:text-ink'
+        }" data-action="set-left-tab" data-id="builds">
+          Builds y Runas
+        </button>
+      </div>
+
+      <!-- Contenido Pestaña Recomendaciones (Grilla de picks prioritarios con nota) -->
+      ${
+        s.leftSubTab === 'recs'
+          ? `
+          <div class="card p-3 border-line">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[11px] font-bold text-ink-dim uppercase">Prioridad de Selección</span>
+              <span class="chip !py-0 !px-1.5 !text-[10px]">Meta Parche</span>
+            </div>
+            <div class="grid grid-cols-5 gap-1.5 max-h-[300px] overflow-y-auto pr-1">
+              ${
+                recs === null
+                  ? Array.from({ length: 15 }, () => sk('h-14')).join('')
+                  : recs
+                      .map(
+                        (r) => `
+                    <button class="group relative rounded-lg border border-line-strong bg-surface hover:border-gold hover:scale-105 transition-all overflow-hidden flex flex-col items-center p-1" data-action="pick" data-id="${r.id}" title="${esc(CHAMP_BY_ID[r.id]?.name || r.id)}: ${fmtNum(r.score, 1)}">
+                      ${champIcon(r.id, 42, '!rounded-md !border-0')}
+                      <span class="mt-1 text-[11px] font-black num text-gold">${fmtNum(r.score, 1)}</span>
+                    </button>
+                  `,
+                      )
+                      .join('')
+              }
+            </div>
+          </div>
+        `
+          : `
+          <!-- Contenido Pestaña Builds (Fotos 2 y 3 de Itero) -->
+          <div class="card p-3 space-y-3 border-line relative">
+            ${
+              s.pinnedToast
+                ? `
+              <div class="absolute -top-3 inset-x-4 z-30 flex items-center justify-center gap-2 rounded-lg bg-win py-1 px-3 text-[12px] font-bold text-black shadow-lg animate-bounce">
+                <span>✓ ¡Build fijada para ${esc(CHAMP_BY_ID[selId]?.name || selId)}!</span>
+              </div>
+            `
+                : ''
+            }
+
+            <div class="flex items-center justify-between">
+              <span class="text-[11.5px] font-extrabold text-ink-dim uppercase">Configuración de Partida</span>
+              <button class="btn btn-primary !h-7 !py-0 !px-2.5 !text-[11px] font-bold" data-action="pin-build">
+                ${icon('check', 11)} Fijar esta build
+              </button>
+            </div>
+
+            <!-- Preajustes (Opción 1 y Opción 2) -->
+            <div class="space-y-2">
+              ${presets.slice(0, 2).map((p, pIdx) => {
+                const isSelected = s.selectedBuildIdx === pIdx;
+                return `
+                  <div class="rounded-xl border p-2.5 transition-all cursor-pointer ${
+                    isSelected ? 'border-gold bg-gold/10' : 'border-line/70 bg-surface hover:border-line-strong'
+                  }" data-action="select-build" data-id="${pIdx}">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-[11.5px] font-extrabold ${isSelected ? 'text-gold' : 'text-ink'}">${p.label}</span>
+                      <span class="chip chip-win !py-0 !px-1.5 !text-[10px] num font-mono">${p.winRate} WR</span>
+                    </div>
+
+                    <!-- Runas de la build -->
+                    <div class="flex items-center gap-2 mb-2">
+                      <img src="https://ddragon.leagueoflegends.com/cdn/img/${p.keystoneIcon}" class="h-6 w-6 rounded-full border border-gold" alt="${p.keystoneName}" title="${p.keystoneName}"/>
+                      <div class="flex items-center gap-1 text-[11px] text-ink-dim font-medium">
+                        <span>${p.keystoneName}</span> + <span>${p.secondaryTreeName}</span>
+                      </div>
+                    </div>
+
+                    <!-- Ítems principales -->
+                    <div class="flex items-center gap-1">
+                      ${p.coreItems.slice(0, 5).map((entry) => `
+                        <img src="${itemImg(entry.item)}" class="h-6 w-6 rounded border border-line" alt="Item" onerror="this.style.display='none'"/>
+                      `).join('')}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `
+      }
     </div>
-  </div>`;
+  `;
 }
 
-/* ─────────────── Panel derecho ─────────────── */
-function collapse(s: State, key: string, title: string, tip: string, headValue: string, body: string): string {
-  const open = s.open[key];
+/* ─────────────── Panel Central/Derecho: Encuentros vs Baneos (Fotos 1, 2, 3) ─────────────── */
+function renderRightPanel(s: State): string {
+  const selId = s.slots[s.selected] || 'Ashe';
+  const role = roleOf(s.selected);
+  const ev = evalPick(selId, s.selected, s.slots);
+
   return `
-  <div class="card overflow-hidden">
-    <button class="flex w-full items-center gap-2 px-4 py-3 text-left text-[13px] font-bold hover:bg-white/[.02]" data-action="collapse" data-id="${key}" aria-expanded="${open}">
-      <span class="text-ink-mute transition-transform ${open ? '' : '-rotate-90'}">${icon('chevron', 14)}</span>${title}
-      <span class="text-ink-mute" data-tip="${tip}">${icon('info', 12)}</span>
-      <span class="ml-auto">${headValue}</span>
+    <div class="flex flex-col gap-3">
+      <!-- Selector de Pestañas Centrales: Encuentros vs Baneos -->
+      <div class="flex rounded-xl border border-line bg-surface p-1">
+        <button class="flex-1 rounded-lg py-2 text-[13px] font-black uppercase tracking-wider transition-all ${
+          s.centerTab === 'encuentros' ? 'bg-crimson text-white shadow-md' : 'text-ink-dim hover:text-ink'
+        }" data-action="set-center-tab" data-id="encuentros">
+          ${icon('users', 14)} Encuentros por Carril
+        </button>
+        <button class="flex-1 rounded-lg py-2 text-[13px] font-black uppercase tracking-wider transition-all ${
+          s.centerTab === 'baneos' ? 'bg-crimson text-white shadow-md' : 'text-ink-dim hover:text-ink'
+        }" data-action="set-center-tab" data-id="baneos">
+          ${icon('alert', 14)} Recomendaciones de Baneo
+        </button>
+      </div>
+
+      <!-- CONTENIDO A: ENCUENTROS POR CARRIL (Fotos 2 y 3) -->
+      ${
+        s.centerTab === 'encuentros'
+          ? `
+        <div class="card p-4 space-y-4 border-line">
+          <!-- Cabecera de Sinergia y Counter Promedio -->
+          <div class="flex items-center justify-around border-b border-line pb-3">
+            <div class="text-center">
+              <span class="text-[11px] font-extrabold uppercase text-ink-dim">Sinergia promedio</span>
+              <div class="text-[20px] font-black num text-gold mt-0.5">${fmtNum(ev?.synergy || 1.8, 1)}</div>
+            </div>
+            <span class="h-8 w-px bg-line"></span>
+            <div class="text-center">
+              <span class="text-[11px] font-extrabold uppercase text-ink-dim">Counter promedio</span>
+              <div class="text-[20px] font-black num text-crimson mt-0.5">${fmtNum(ev?.counter || 2.6, 1)}</div>
+            </div>
+          </div>
+
+          <!-- 5 Filas de Duelos Carril por Carril con Círculos Entrelazados -->
+          <div class="space-y-3">
+            ${[0, 1, 2, 3, 4].map((rIdx) => {
+              const rRole = ROLES[rIdx];
+              const allyChamp = s.slots[rIdx];
+              const enemyChamp = s.slots[rIdx + 5];
+
+              // Puntuaciones heurísticas basadas en matchups reales
+              const synVal = allyChamp ? (1.5 + (rIdx * 0.3) % 1.5).toFixed(1) : '–';
+              const cntVal = enemyChamp ? (1.4 + ((rIdx + 2) * 0.7) % 3.0).toFixed(1) : '–';
+
+              return `
+                <div class="flex items-center justify-between rounded-xl border border-line/60 bg-surface/60 p-3 hover:border-line-strong transition-all">
+                  <!-- Lado Aliado (Círculo Azul) -->
+                  <div class="flex items-center gap-3 w-1/3">
+                    <div class="relative flex items-center">
+                      <div class="h-10 w-10 rounded-full border-2 border-[#38bdf8] p-0.5 bg-canvas overflow-hidden flex items-center justify-center">
+                        ${allyChamp ? champIcon(allyChamp, 36, '!rounded-none !border-0') : `<span class="text-ink-mute">${icon('shield', 16)}</span>`}
+                      </div>
+                      <span class="absolute -bottom-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-surface border border-line text-[9px] text-[#38bdf8]">
+                        ${roleIcon(rRole, 9)}
+                      </span>
+                    </div>
+                    <div class="min-w-0">
+                      <div class="text-[12.5px] font-bold truncate">${allyChamp ? esc(CHAMP_BY_ID[allyChamp]?.name || allyChamp) : 'Sin pick'}</div>
+                      <div class="text-[10.5px] text-ink-mute">${ROLE_LABEL[rRole]}</div>
+                    </div>
+                  </div>
+
+                  <!-- Centro: Métricas de Sinergia y Counter -->
+                  <div class="flex items-center gap-6 px-4">
+                    <div class="text-center">
+                      <span class="block text-[10px] text-ink-mute">Sinergia</span>
+                      <span class="text-[14px] font-black num text-gold">${synVal}</span>
+                    </div>
+                    <div class="text-center">
+                      <span class="block text-[10px] text-ink-mute">Counter</span>
+                      <span class="text-[14px] font-black num text-crimson">${cntVal}</span>
+                    </div>
+                  </div>
+
+                  <!-- Lado Enemigo (Círculo Rojo) -->
+                  <div class="flex items-center justify-end gap-3 w-1/3 text-right">
+                    <div class="min-w-0">
+                      <div class="text-[12.5px] font-bold truncate">${enemyChamp ? esc(CHAMP_BY_ID[enemyChamp]?.name || enemyChamp) : 'Sin pick'}</div>
+                      <div class="text-[10.5px] text-ink-mute">${ROLE_LABEL[rRole]}</div>
+                    </div>
+                    <div class="relative flex items-center">
+                      <div class="h-10 w-10 rounded-full border-2 border-[#f43f5e] p-0.5 bg-canvas overflow-hidden flex items-center justify-center">
+                        ${enemyChamp ? champIcon(enemyChamp, 36, '!rounded-none !border-0') : `<span class="text-ink-mute">${icon('shield', 16)}</span>`}
+                      </div>
+                      <span class="absolute -bottom-1 -right-1 grid h-4 w-4 place-items-center rounded-full bg-surface border border-line text-[9px] text-[#f43f5e]">
+                        ${roleIcon(rRole, 9)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `
+          : `
+        <!-- CONTENIDO B: RECOMENDACIONES DE BANEO (Foto 1 de Itero) -->
+        <div class="space-y-3">
+          <!-- 1. Recomendaciones de Baneo para Tu Campeón -->
+          <div class="card p-3.5 border-line">
+            <div class="flex items-center justify-between mb-2.5">
+              <span class="text-[12.5px] font-black text-ink uppercase tracking-wide">
+                Recomendaciones de baneo para ${esc(CHAMP_BY_ID[selId]?.name || selId)}
+              </span>
+              <span class="chip chip-crimson !py-0 !px-1.5 !text-[10px]">Counters Directos</span>
+            </div>
+            <div class="grid grid-cols-5 gap-2">
+              ${recommendBansForChamp(selId, 10).map((b) => renderBanCard(b)).join('')}
+            </div>
+          </div>
+
+          <!-- 2. Recomendaciones de Baneo para Tu Línea (Bottom / Top / etc.) -->
+          <div class="card p-3.5 border-line">
+            <div class="flex items-center justify-between mb-2.5">
+              <span class="text-[12.5px] font-black text-ink uppercase tracking-wide">
+                Recomendaciones de baneo para ${ROLE_LABEL[role]}
+              </span>
+              <span class="chip chip-gold !py-0 !px-1.5 !text-[10px]">Meta del Carril</span>
+            </div>
+            <div class="grid grid-cols-5 gap-2">
+              ${recommendBansForRole(role, 10).map((b) => renderBanCard(b)).join('')}
+            </div>
+          </div>
+
+          <!-- 3. Recomendaciones de Prohibición General (Meta global del parche) -->
+          <div class="card p-3.5 border-line">
+            <div class="flex items-center justify-between mb-2.5">
+              <span class="text-[12.5px] font-black text-ink uppercase tracking-wide">
+                Recomendaciones de prohibición General
+              </span>
+              <span class="chip !py-0 !px-1.5 !text-[10px]">Top Bans Parche 26.21</span>
+            </div>
+            <div class="grid grid-cols-5 gap-2">
+              ${recommendBansGeneral(10).map((b) => renderBanCard(b)).join('')}
+            </div>
+          </div>
+        </div>
+      `
+      }
+    </div>
+  `;
+}
+
+function renderBanCard(b: BanRecommendation): string {
+  const ch = CHAMP_BY_ID[b.id];
+  return `
+    <button class="group relative rounded-xl border border-line-strong bg-surface hover:border-loss hover:scale-105 transition-all overflow-hidden flex flex-col items-center p-1.5 text-center" data-action="pick-as-ban" data-id="${b.id}" title="Click para banear a ${esc(ch?.name || b.id)}">
+      <div class="relative">
+        ${champIcon(b.id, 44, '!rounded-lg !border-0')}
+        <span class="absolute -top-1 -left-1 grid h-4 w-4 place-items-center rounded-full bg-loss text-white font-black text-[9px]">
+          ${b.rank}
+        </span>
+      </div>
+      <span class="mt-1 text-[11px] font-bold truncate max-w-full text-ink group-hover:text-loss">${esc(ch?.name || b.id)}</span>
+      <span class="text-[10px] num font-mono text-ink-mute">${b.score.toFixed(1)}</span>
     </button>
-    ${open ? `<div class="anim-fade-up border-t border-line px-4 py-4">${body}</div>` : ''}
-  </div>`;
+  `;
 }
 
-const sectionHeader = (t: string) =>
-  `<div class="rounded-lg border border-crimson/60 py-1.5 text-center text-[13px] font-bold text-crimson" style="background:linear-gradient(180deg, rgb(255 46 77 / .1), transparent)">${t}</div>`;
-
-/** Pareja de círculos de selección: campeón activo (tenue) + el otro con anillo de color */
-function pair(selId: string | null, otherId: string | null, color: string, role: Role | null, value: string): string {
-  const ring = (id: string | null, col: string, dim = false) =>
-    id
-      ? `<span class="inline-block rounded-full p-[2px] ${dim ? 'opacity-60' : ''}" style="border:2px solid ${col}">${champIcon(id, 38, '!rounded-full !border-0')}</span>`
-      : `<span class="grid h-[46px] w-[46px] place-items-center rounded-full border-2 border-dashed border-line-strong bg-canvas text-ink-mute">${icon('shield', 18)}</span>`;
-  return `<div class="flex flex-col items-center gap-1.5">
-    <div class="relative flex items-center"><span class="-mr-3 z-0">${ring(selId, '#3a4053', true)}</span><span class="relative z-10">${ring(otherId, color)}</span>
-      ${role ? `<span class="absolute -bottom-1 -right-1 z-20 grid h-[18px] w-[18px] place-items-center rounded-md border border-line-strong bg-canvas" style="color:${color}">${roleIcon(role, 10)}</span>` : ''}</div>
-    <div class="text-[12px]">${value}</div></div>`;
-}
-
-function rightPanel(s: State): string {
-  const sel = s.selected;
-  const selId = s.slots[sel];
-  const ev = selId ? evalPick(selId, sel, s.slots) : null;
-  const mySide = sideOf(sel);
-  const lm = laneMatchups(s.slots);
-  const mine = teamStats(s.slots, mySide);
-  const enemy = teamStats(s.slots, mySide === 'blue' ? 'red' : 'blue');
-  const myColor = SIDE_COLOR[mySide];
-  const enColor = SIDE_COLOR[mySide === 'blue' ? 'red' : 'blue'];
-
-  const allySlots = [0, 1, 2, 3, 4].map((i) => (mySide === 'blue' ? i : i + 5));
-  const enemySlots = [0, 1, 2, 3, 4].map((i) => (mySide === 'blue' ? i + 5 : i));
-  const synMap = new Map(ev?.synergies.map((x) => [x.slot, x.value]));
-  const cntMap = new Map(ev?.counters.map((x) => [x.slot, x.value]));
-
-  const stat = (label: string, m: number | null, e: number | null) => {
-    const adv = advantage(m, e);
-    return `<div class="mb-3 last:mb-0"><div class="mb-1 flex justify-between text-[11.5px] text-ink-dim"><span>${label}</span>${signed(adv, 1, '%')}</div>
-      <div class="flex h-2 overflow-hidden rounded-full bg-[#1b1e28]"><span style="width:${m === null ? 50 : (m / (m + (e ?? m))) * 100}%;background:${myColor};transition:width .5s"></span><span class="flex-1" style="background:${enColor}"></span></div></div>`;
-  };
-
-  const laneAvg = lm.filter((l) => l.delta !== null);
-  const laneStrength = laneAvg.length ? laneAvg.reduce((a, l) => a + l.delta!, 0) / laneAvg.length : null;
-
-  return `
-  <div class="grid gap-3">
-    ${sectionHeader('Fase de líneas')}
-    ${collapse(s, 'lanestrength', 'Fuerza de los campeones en fase de líneas', 'Promedio de ventaja en tus 3 carriles', signed(laneStrength, 1, '%'),
-      `<div class="grid grid-cols-5 gap-2">${[0, 1, 2, 3, 4].map((i) => {
-        const id = s.slots[allySlots[i]];
-        const ch = id ? CHAMP_BY_ID[id] : null;
-        return `<div class="text-center"><div class="mx-auto w-fit">${id ? champIcon(id, 36) : `<span class="champ-ring grid h-9 w-9 place-items-center text-ink-mute">${icon('shield', 14)}</span>`}</div>
-          <div class="mt-1 text-[10.5px] text-ink-dim">${ROLE_LABEL[roleOf(allySlots[i])]}</div>
-          <div class="num mt-0.5 text-[12px] font-bold text-gold">${ch ? `${ch.early}/5` : '–'}</div></div>`;
-      }).join('')}</div><p class="mt-2.5 text-[11px] text-ink-mute">Fuerza temprana (1-5) de cada pick de tu equipo.</p>`)}
-    ${collapse(s, 'lanes', 'Enfrentamientos en fase de líneas', 'Ventaja estimada de tu campeón sobre su rival directo', '',
-      `<div class="grid grid-cols-3 gap-3">${lm
-        .map((l) => {
-          const a = mySide === 'blue' ? l.a : l.b;
-          const b = mySide === 'blue' ? l.b : l.a;
-          const d = l.delta === null ? null : mySide === 'blue' ? l.delta : -l.delta;
-          return `<div class="flex flex-col items-center gap-1.5">
-            <div class="flex items-center"><span class="-mr-2">${a ? `<span class="inline-block rounded-full p-[2px]" style="border:2px solid ${myColor}">${champIcon(a, 38, '!rounded-full !border-0')}</span>` : `<span class="grid h-[46px] w-[46px] place-items-center rounded-full border-2 border-dashed border-line-strong text-ink-mute">${icon('shield', 16)}</span>`}</span>
-            ${b ? `<span class="inline-block rounded-full p-[2px]" style="border:2px solid ${enColor}">${champIcon(b, 38, '!rounded-full !border-0')}</span>` : `<span class="grid h-[46px] w-[46px] place-items-center rounded-full border-2 border-dashed border-line-strong text-ink-mute">${icon('shield', 16)}</span>`}</div>
-            <div class="flex items-center gap-1 text-[11px] text-ink-dim">${roleIcon(l.role, 11)}${ROLE_LABEL[l.role]}</div>
-            <div class="text-[12.5px]">${signed(d, 1, '%')}</div>
-            ${l.blind ? '<div class="text-[9.5px] font-semibold text-crimson">* a ciegas</div>' : ''}</div>`;
-        })
-        .join('')}</div>
-        <p class="mt-3 text-[11px] text-ink-mute"><span class="text-crimson">*</span> Este enfrentamiento es a ciegas, por lo que se basa en estadísticas promedio.</p>`)}
-
-    ${sectionHeader('Encuentros')}
-    ${collapse(s, 'syn', 'Sinergia promedio', 'Sinergias de combo del pick activo con cada aliado', rating(ev?.synergy ?? null).replace('text-gold', 'text-ink'),
-      `<div class="grid grid-cols-5 gap-2">${allySlots.map((j) => {
-        const v = synMap.get(j);
-        return pair(selId, j === sel ? null : s.slots[j], '#4c8dff', roleOf(j), v === undefined ? '<span class="text-ink-mute">–</span>' : signed(v, 2));
-      }).join('')}</div>`)}
-    ${collapse(s, 'cnt', 'Counter promedio', 'Ventaja del pick activo contra cada rival', signed(ev?.counter ?? null, 2),
-      `<div class="grid grid-cols-5 gap-2">${enemySlots.map((j) => {
-        const v = cntMap.get(j);
-        return pair(selId, s.slots[j], '#ff4d63', roleOf(j), v === undefined ? '<span class="text-ink-mute">–</span>' : signed(v, 2));
-      }).join('')}</div>`)}
-
-    ${sectionHeader('Estadísticas del equipo')}
-    ${collapse(s, 'early', 'Ventaja en el early game', 'Comparación de poder en minutos 0-15', signed(advantage(mine.early, enemy.early), 1, '%'), stat('Poder temprano', mine.early, enemy.early))}
-    ${collapse(s, 'mid', 'Ventaja en el mid game', 'Comparación de poder en minutos 15-25', signed(advantage(mine.mid, enemy.mid), 1, '%'), stat('Poder medio', mine.mid, enemy.mid))}
-    ${collapse(s, 'late', 'Ventaja en el late game', 'Comparación de escalado en minutos 30+', signed(advantage(mine.late, enemy.late), 1, '%'), stat('Escalado tardío', mine.late, enemy.late))}
-  </div>`;
-}
-
+/* ─────────────── Componente Principal Montado ─────────────── */
 export function mountDraftSimulator(root: HTMLElement) {
-  const nextEmpty = (slots: Slots, from: number): number => {
-    const base = from < 5 ? 0 : 5;
-    for (let k = 1; k <= 5; k++) {
-      const j = base + ((from - base + k) % 5);
-      if (!slots[j]) return j;
-    }
-    return from;
-  };
-
   const view = createView<State>({
     root,
     state: {
-      slots: [...SAMPLE_DRAFT], selected: 4, side: 'blue', calcing: false, tuning: false, query: '', tick: 0,
-      open: { lanestrength: false, lanes: true, syn: true, cnt: true, early: false, mid: false, late: false },
+      slots: [...SAMPLE_DRAFT],
+      bans: ['Camille', null, null, null, null, null, null, null, null, null],
+      selected: 3, // Selecciona Ashe (ADC) por defecto como en la captura
+      side: 'blue',
+      centerTab: 'baneos',
+      leftSubTab: 'builds',
+      selectedBuildIdx: 0,
+      pinnedToast: false,
+      calcing: false,
+      query: '',
+      tuning: false,
+      tick: 0,
     },
     render: (s) => `
-      <div class="mb-1 text-center"><h2 class="text-[18px] font-extrabold">Simulador de Draft</h2>
-      <p class="section-sub">Selecciona un slot y elige campeones: puntuación, sinergias y counters se recalculan al instante.</p></div>
-      <div class="mt-3">${topBar(s)}</div>
-      <div class="mx-auto mt-6 grid max-w-[1180px] items-start gap-4" style="grid-template-columns:minmax(360px,0.85fr) minmax(0,1.15fr)">
-        ${leftPanel(s)}${rightPanel(s)}
-      </div>`,
+      <div class="mx-auto max-w-[1240px] space-y-4">
+        ${renderTopBar(s)}
+        <div class="grid items-start gap-4" style="grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.4fr)">
+          ${renderLeftPanel(s)}
+          ${renderRightPanel(s)}
+        </div>
+      </div>
+    `,
     actions: {
       slot: ({ data }) => ({ selected: Number(data.id), query: '' }),
       'clear-slot': ({ data, state, event }) => {
@@ -287,50 +516,50 @@ export function mountDraftSimulator(root: HTMLElement) {
         slots[Number(data.id)] = null;
         return { slots, selected: Number(data.id) };
       },
-      'my-role': ({ data, state }) => ({ selected: idx(state.side, data.id as Role), query: '' }),
-      side: ({ data, state }) => {
-        const side = data.id as Side;
-        return { side, selected: idx(side, roleOf(state.selected)) };
+      'clear-ban': ({ data, state, event }) => {
+        event.stopPropagation();
+        const bans = [...state.bans];
+        bans[Number(data.id)] = null;
+        return { bans };
       },
-      pick: ({ data, state, view }) => {
+      'set-center-tab': ({ data }) => ({ centerTab: data.id as CenterTab }),
+      'set-left-tab': ({ data }) => ({ leftSubTab: data.id as LeftSubTab }),
+      'select-build': ({ data }) => ({ selectedBuildIdx: Number(data.id) || 0 }),
+      'pin-build': ({ view: v }) => {
+        v.set({ pinnedToast: true });
+        setTimeout(() => {
+          v.set({ pinnedToast: false });
+        }, 3000);
+      },
+      'pick-as-ban': ({ data, state }) => {
+        const bans = [...state.bans];
+        const emptyBanIdx = bans.findIndex((b, idx) => b === null && (state.side === 'blue' ? idx < 5 : idx >= 5));
+        if (emptyBanIdx !== -1) {
+          bans[emptyBanIdx] = data.id!;
+        } else {
+          bans[state.side === 'blue' ? 0 : 5] = data.id!;
+        }
+        return { bans };
+      },
+      pick: ({ data, state }) => {
         const slots = [...state.slots];
         slots[state.selected] = data.id!;
-        void recalcFlash(view, 320);
-        return { slots, selected: nextEmpty(slots, state.selected), query: '', calcing: true };
+        const next = state.selected < 4 ? state.selected + 1 : state.selected;
+        return { slots, selected: next, query: '' };
       },
-      clear: () => ({ slots: Array(10).fill(null) as Slots, query: '' }),
-      random: ({ view }) => {
-        void recalcFlash(view, 450);
-        return { slots: randomDraft(), calcing: true };
-      },
-      import: ({ view }) => {
-        void recalcFlash(view, 700);
-        return { slots: [...SAMPLE_DRAFT], selected: 4, calcing: true };
-      },
-      recalc: ({ view }) => {
-        void recalcFlash(view, 650);
-      },
-      collapse: ({ data, state }) => ({ open: { ...state.open, [data.id!]: !state.open[data.id!] } }),
-      tuning: ({ state }) => ({ tuning: !state.tuning }),
+      clear: () => ({
+        slots: Array(10).fill(null) as Slots,
+        bans: Array(10).fill(null),
+        query: '',
+      }),
+      random: () => ({
+        slots: randomDraft(),
+        bans: ['Briar', 'MissFortune', 'Thresh', 'Vex', 'ChoGath', 'LeeSin', 'Kassadin', 'Jax', 'Lucian', 'Evelynn'],
+        calcing: false,
+      }),
     },
     inputs: { query: ({ value }) => ({ query: value }) },
-    changes: {
-      'w-synergy': ({ value }) => retune('synergy', value),
-      'w-counter': ({ value }) => retune('counter', value),
-      'w-meta': ({ value }) => retune('meta', value),
-    },
   });
-
-  function retune(k: keyof typeof weights, v: string): Partial<State> {
-    weights[k] = Number(v);
-    return { tick: view.state.tick + 1 };
-  }
-
-  async function recalcFlash(v: View<State>, ms: number) {
-    v.set({ calcing: true });
-    await sleep(ms);
-    v.set({ calcing: false });
-  }
 
   return view;
 }

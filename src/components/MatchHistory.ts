@@ -44,7 +44,7 @@ export interface TrackedPlayer {
 }
 
 const KNOWN_PROFILES: TrackedPlayer[] = [
-  { id: 'aczi-main', name: 'Aczi593', tag: 'Aczi', region: 'LAS', shortRank: 'S3', rankColor: '#94a3b8', iconId: 4568 },
+  { id: 'aczi-main', name: 'Aczi593', tag: 'Aczi', region: 'LAS', shortRank: 'S3', rankColor: '#94a3b8', iconId: 743 },
   { id: 'aczi-las', name: 'Aczi593', tag: 'LAS', region: 'LAS', shortRank: 'G2', rankColor: '#eab308', iconId: 29 },
   { id: 'july-1', name: 'JULY3P', tag: '1212', region: 'LAS', shortRank: '', rankColor: '#94a3b8', iconId: 588 },
   { id: 'july-2', name: 'JULY3P SIN LUZ', tag: '777', region: 'LAS', shortRank: 'E1', rankColor: '#10b981', iconId: 4050 },

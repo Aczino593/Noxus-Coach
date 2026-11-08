@@ -170,3 +170,48 @@ export const SAMPLE_DRAFT: Slots = [
   'Ornn', 'JarvanIV', 'Orianna', 'Jinx', null,
   'Renekton', 'LeeSin', 'Syndra', 'Caitlyn', 'Nautilus',
 ];
+
+/* ─────────────────────────────────────────────────────────────
+ * RECOMENDACIONES DE BANEO (Estilo Itero Draft Coach)
+ * ───────────────────────────────────────────────────────────── */
+export interface BanRecommendation {
+  id: string;
+  rank: number;
+  score: number;
+  reason?: string;
+}
+
+export function recommendBansForChamp(champId: string, count = 10): BanRecommendation[] {
+  const me = CHAMP_BY_ID[champId];
+  if (!me) return recommendBansGeneral(count);
+  const candidates = Object.values(CHAMP_BY_ID)
+    .filter((c) => c.id !== champId)
+    .map((enemy) => {
+      const cnt = counterPair(enemy, me);
+      const score = Math.round((cnt * 1.6 + (enemy.early - me.early) * 0.12 + hash01(`ban:${enemy.id}:${champId}`) * 0.5 + 1.2) * 10) / 10;
+      return { id: enemy.id, score };
+    });
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates.slice(0, count).map((c, i) => ({ id: c.id, rank: i + 1, score: Math.max(1.0, c.score) }));
+}
+
+export function recommendBansForRole(role: Role, count = 10): BanRecommendation[] {
+  const roleChamps = champsForRole(role);
+  const candidates = roleChamps.map((c) => {
+    const meta = metaBias(c.id);
+    const score = Math.round((c.early * 0.18 + c.late * 0.18 + meta + 1.2) * 10) / 10;
+    return { id: c.id, score };
+  });
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates.slice(0, count).map((c, i) => ({ id: c.id, rank: i + 1, score: Math.max(1.0, c.score) }));
+}
+
+export function recommendBansGeneral(count = 10): BanRecommendation[] {
+  const candidates = Object.values(CHAMP_BY_ID).map((c) => {
+    const score = Math.round((c.early * 0.15 + c.late * 0.22 + hash01(`meta-ban:${c.id}`) * 0.6 + 1.0) * 10) / 10;
+    return { id: c.id, score };
+  });
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates.slice(0, count).map((c, i) => ({ id: c.id, rank: i + 1, score: Math.max(1.0, c.score) }));
+}
+

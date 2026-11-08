@@ -13,9 +13,9 @@ interface State {
 }
 
 const TABS: { id: ToolsTab; label: string }[] = [
+  { id: 'draft', label: 'Selección de Campeones & Bans (Itero)' },
   { id: 'builds', label: 'Preparador de Builds & Items' },
   { id: 'vision', label: 'Mapa de Visión Interactivo' },
-  { id: 'draft', label: 'Herramienta de Draft Estándar' },
   { id: 'pool', label: 'Constructor de Champion Pool' },
   { id: 'patch', label: 'Análisis del parche 26.21' },
 ];
@@ -23,7 +23,7 @@ const TABS: { id: ToolsTab; label: string }[] = [
 export function mountToolsView(root: HTMLElement) {
   const view = createView<State>({
     root,
-    state: { tab: 'builds' },
+    state: { tab: 'draft' },
     render: (s) => `
       ${subnav(TABS, s.tab, 'tab')}
       <div id="tools-builds-tab" class="${s.tab === 'builds' ? '' : 'hidden'}"></div>
