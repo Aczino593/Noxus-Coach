@@ -5,8 +5,9 @@ import { mountDraftSimulator } from './DraftSimulator';
 import { mountVisionMap } from './VisionMap';
 import { mountChampionPool } from './ChampionPool';
 import { mountPatchAnalysis } from './PatchAnalysis';
+import { mountChampSelectCoach } from './ChampSelectCoach';
 
-export type ToolsTab = 'builds' | 'vision' | 'draft' | 'pool' | 'patch';
+export type ToolsTab = 'builds' | 'vision' | 'draft' | 'pool' | 'patch' | 'live-draft';
 
 interface State {
   tab: ToolsTab;
@@ -18,6 +19,7 @@ const TABS: { id: ToolsTab; label: string }[] = [
   { id: 'vision', label: 'Mapa de Visión Interactivo' },
   { id: 'pool', label: 'Constructor de Champion Pool' },
   { id: 'patch', label: 'Análisis del parche 26.21' },
+  { id: 'live-draft', label: 'Recomendador de selección' },
 ];
 
 export function mountToolsView(root: HTMLElement) {
@@ -31,6 +33,7 @@ export function mountToolsView(root: HTMLElement) {
       <div id="tools-draft-tab" class="${s.tab === 'draft' ? '' : 'hidden'}"></div>
       <div id="tools-pool-tab" class="${s.tab === 'pool' ? '' : 'hidden'}"></div>
       <div id="tools-patch-tab" class="${s.tab === 'patch' ? '' : 'hidden'}"></div>
+      <div id="tools-live-draft-tab" class="${s.tab === 'live-draft' ? '' : 'hidden'}"></div>
     `,
     actions: {
       tab: ({ data }) => {
@@ -44,6 +47,7 @@ export function mountToolsView(root: HTMLElement) {
       const draftEl = root.querySelector<HTMLElement>('#tools-draft-tab');
       const poolEl = root.querySelector<HTMLElement>('#tools-pool-tab');
       const patchEl = root.querySelector<HTMLElement>('#tools-patch-tab');
+      const liveDraftEl = root.querySelector<HTMLElement>('#tools-live-draft-tab');
 
       if (buildsEl && v.state.tab === 'builds') {
         mountBuildPlanner(buildsEl);
@@ -59,6 +63,9 @@ export function mountToolsView(root: HTMLElement) {
       }
       if (patchEl && v.state.tab === 'patch') {
         mountPatchAnalysis(patchEl);
+      }
+      if (liveDraftEl && v.state.tab === 'live-draft') {
+        mountChampSelectCoach(liveDraftEl);
       }
     },
   });

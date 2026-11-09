@@ -79,6 +79,7 @@ Ventana flotante de alto rendimiento que se sincroniza con el cliente de League 
 - **Mapa Interactivo de Visión:** Localización de spots clave de centinelas defensivos, ofensivos y de control en objetivos mayores (Dragón, Barón, Buffs).
 - **Preparador de Builds y Adaptación:** Catálogo completo de objetos con sugerencias contra arquetipos (Anti-Tanque, Anti-Curación, Anti-Burst, Anti-Poke).
 - **Constructor de Champion Pool & Análisis del Parche 26.21:** Recomendaciones meta y tier list contextualizada.
+- **Recomendador de selección local:** Lee bajo demanda los picks visibles del cliente, resume la composición rival, presenta hasta cuatro objetos situacionales con su propósito y añade alertas tácticas por campeón (por ejemplo, presión temprana, visión o engage). No selecciona, compra ni importa objetos.
 
 ---
 
@@ -156,6 +157,23 @@ npm run tauri:dev
 ---
 
 ## 🧪 Cómo Probar las Funcionalidades In-Game
+
+### Recomendador de selección local
+
+1. Abre League of Legends y entra a una sala de selección de campeones.
+2. Abre Noxus Coach y entra a **Herramientas → Recomendador de selección**.
+3. Pulsa **Actualizar selección** para tomar una instantánea manual de los picks visibles. Vuelve a pulsarlo si quieres refrescarla; la app no sondea el cliente en segundo plano.
+4. Si el rol no se detectó, elígelo en el menú. Revisa **Lectura táctica** para consejos preventivos por campeón y **Sugerencias de objetos** para las situaciones y el propósito de cada ítem. Son reglas heurísticas locales, no una build garantizada.
+
+En macOS se busca el cliente en `/Applications/League of Legends.app/Contents/LoL` (también en `~/Applications`). Windows busca las carpetas habituales de Riot en los discos C:, D: y E:. Para una instalación en otra ubicación, configura `NOXUS_LEAGUE_DIR` con la carpeta `LoL` antes de iniciar Noxus Coach. En desarrollo, por ejemplo:
+
+```bash
+NOXUS_LEAGUE_DIR="/ruta/a/League of Legends.app/Contents/LoL" npm run tauri:dev
+```
+
+La integración solo solicita la sesión de selección al pulsar el botón y usa el `lockfile` local para autenticarse con el cliente en `127.0.0.1`. La función no escribe en el cliente ni accede a datos ocultos.
+
+---
 
 1. **Modo Demo / Navegación Inmediata:**  
    Incluso con el juego cerrado, puedes abrir la pestaña **Preparador de Builds & Draft ➔ Selección de Campeones & Bans** para probar el motor de draft, las recomendaciones de baneo, las notas de carril y la fijación de builds.

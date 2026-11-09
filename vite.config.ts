@@ -4,6 +4,7 @@ import type { Plugin } from 'vite';
 import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 
 function riotApiProxyPlugin(defaultApiKey: string): Plugin {
   return {
@@ -71,10 +72,14 @@ function riotApiProxyPlugin(defaultApiKey: string): Plugin {
 }
 
 function findLoLDir(): string | null {
+  const configured = process.env.NOXUS_LEAGUE_DIR;
   const candidates = [
+    ...(configured ? [configured] : []),
     'C:\\Riot Games\\League of Legends',
     'D:\\Riot Games\\League of Legends',
     'E:\\Riot Games\\League of Legends',
+    '/Applications/League of Legends.app/Contents/LoL',
+    path.join(os.homedir(), 'Applications/League of Legends.app/Contents/LoL'),
   ];
   return candidates.find((dir) => fs.existsSync(dir)) || null;
 }
