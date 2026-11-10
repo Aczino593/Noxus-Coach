@@ -8,6 +8,7 @@ Asistente tactico de alto rendimiento y coach in-game para League of Legends.
 [![Vite](https://img.shields.io/badge/Vite-6.4-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vite.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Riot Games API](https://img.shields.io/badge/Riot%20Games-Developer%20API-EB0029?style=flat-square&logo=riotgames&logoColor=white)](https://developer.riotgames.com/)
+[![Cloudflare Pages](https://img.shields.io/badge/Cloudflare_Pages-Online-F38020?style=flat-square&logo=cloudflare&logoColor=white)](https://noxus-coach.pages.dev/)
 [![Security Audit](https://img.shields.io/badge/Vulnerabilities-0-brightgreen?style=flat-square)](https://github.com/Aczino593/Noxus-Coach)
 [![License](https://img.shields.io/badge/License-MIT-gray?style=flat-square)](LICENSE)
 
@@ -15,11 +16,11 @@ Noxus Coach es una aplicacion integral de analitica, simulacion predictiva de dr
 
 ---
 
-## Acceso al Proyecto Desplegado
+## Demostracion en Linea
 
-Para ver y probar el proyecto desplegado, utiliza el siguiente enlace:
+Para acceder y probar la version web del proyecto desplegada en Cloudflare Pages:
 
-- Enlace de acceso: https://drive.google.com/drive/folders/1xfBBXQKKK-6ex5ujo4jAk7S5d4s-_2UZ?usp=sharing
+- Enlace de acceso directo: [https://noxus-coach.pages.dev/](https://noxus-coach.pages.dev/)
 
 ---
 
