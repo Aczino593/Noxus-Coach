@@ -23,3 +23,7 @@ yarn-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Documentación interna de trabajo (preservada localmente)
+docs/
+contexto.md
